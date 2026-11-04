@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:pallijob/screens/employer/edit_job_screen.dart';
 import 'package:pallijob/screens/student/student_job_listings_screen.dart';
 
 class ManageJobsScreen extends StatefulWidget {
@@ -152,6 +153,11 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
                                       StudentJobDetailsScreen(job: job),
                                 ),
                               ),
+                              onEdit: () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => EditJobScreen(job: job),
+                                ),
+                              ),
                             ),
                           ),
                         );
@@ -178,10 +184,15 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
 }
 
 class _EmployerJobCard extends StatelessWidget {
-  const _EmployerJobCard({required this.job, required this.onTap});
+  const _EmployerJobCard({
+    required this.job,
+    required this.onTap,
+    required this.onEdit,
+  });
 
   final StudentJobListing job;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -197,45 +208,65 @@ class _EmployerJobCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Text(
-                job.title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: const Color(0xFF173B27),
-                  fontWeight: FontWeight.w600,
+              Expanded(
+                child: InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        job.title,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: const Color(0xFF173B27),
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.location_on_outlined,
+                            color: Color(0xFF247545),
+                            size: 17,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              job.location,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: const Color(0xFF647369)),
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: Color(0xFF247545),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        job.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: const Color(0xFF647369),
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.location_on_outlined,
-                    color: Color(0xFF247545),
-                    size: 17,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      job.location,
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: const Color(0xFF647369)),
-                    ),
-                  ),
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    color: Color(0xFF247545),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                job.description,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium
-                    ?.copyWith(color: const Color(0xFF647369), height: 1.4),
+              const SizedBox(width: 8),
+              IconButton(
+                key: ValueKey('edit-job-${job.id}'),
+                tooltip: 'Edit ${job.title}',
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined, color: Color(0xFF247545)),
               ),
             ],
           ),

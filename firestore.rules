@@ -70,6 +70,28 @@ service cloud.firestore {
         && request.resource.data.location.size() > 0
         && request.resource.data.requirements is string
         && request.resource.data.requirements.size() > 0;
+
+      // Employers can update only their job's editable listing fields.
+      allow update: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employer'
+        && resource.data.employerId == request.auth.uid
+        && request.resource.data.employerId == resource.data.employerId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title',
+          'description',
+          'location',
+          'requirements'
+        ])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.description is string
+        && request.resource.data.description.size() > 0
+        && request.resource.data.location is string
+        && request.resource.data.location.size() > 0
+        && request.resource.data.requirements is string
+        && request.resource.data.requirements.size() > 0;
     }
   }
 }
