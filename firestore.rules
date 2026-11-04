@@ -1,0 +1,68 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{userId} {
+
+      // Users can read only their own profile.
+      allow read: if request.auth != null
+                  && request.auth.uid == userId;
+
+      // Users can create their profile with a valid role.
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.role in [
+                      'student', 'employer'
+                    ];
+
+      // Users cannot change their registered role.
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && resource.data.role in [
+                      'student', 'employer'
+                    ]
+                    && request.resource.data.role ==
+                       resource.data.role;
+
+      // Profile deletion is not permitted.
+      allow delete: if false;
+    }
+
+    match /jobs/{jobId} {
+
+      // Only accounts registered as Employer can post jobs.
+      allow create: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employer'
+        && request.resource.data.keys().hasAll([
+          'title',
+          'description',
+          'location',
+          'requirements',
+          'employerId',
+          'createdAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'title',
+          'description',
+          'location',
+          'requirements',
+          'employerId',
+          'createdAt'
+        ])
+        && request.resource.data.employerId ==
+           request.auth.uid
+        && request.resource.data.createdAt ==
+           request.time
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.description is string
+        && request.resource.data.description.size() > 0
+        && request.resource.data.location is string
+        && request.resource.data.location.size() > 0
+        && request.resource.data.requirements is string
+        && request.resource.data.requirements.size() > 0;
+    }
+  }
+}
