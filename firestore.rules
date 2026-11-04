@@ -31,6 +31,13 @@ service cloud.firestore {
 
     match /jobs/{jobId} {
 
+      // Students and employers with a valid profile can view job listings.
+      allow read: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in [
+          'student', 'employer'
+        ];
+
       // Only accounts registered as Employer can post jobs.
       allow create: if request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
