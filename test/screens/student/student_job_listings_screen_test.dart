@@ -15,6 +15,26 @@ void main() {
     employerId: 'employer-1',
     createdAt: null,
   );
+  const secondJob = StudentJobListing(
+    id: 'job-2',
+    title: 'Shop Assistant',
+    description: 'Help customers find products.',
+    location: 'Busan',
+    requirements: 'Helpful and organized.',
+    employerId: 'employer-2',
+    createdAt: null,
+  );
+  const thirdJob = StudentJobListing(
+    id: 'job-3',
+    title: 'Delivery Driver',
+    description: 'Deliver local orders.',
+    location: 'Busan',
+    requirements: 'Valid driver license.',
+    employerId: 'employer-3',
+    createdAt: null,
+  );
+
+  const testJobs = [job, secondJob, thirdJob];
 
   testWidgets('shows loading state while jobs are loading', (tester) async {
     final controller = StreamController<List<StudentJobListing>>();
@@ -84,5 +104,108 @@ void main() {
 
     expect(find.text('Could not load jobs'), findsOneWidget);
     expect(find.textContaining('do not have permission'), findsOneWidget);
+  });
+
+  testWidgets(
+    'searches titles case-insensitively and trims surrounding spaces',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StudentJobListingsScreen(jobsStream: Stream.value(testJobs)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('job-search-field')),
+        '  cAfE  ',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cafe Assistant'), findsOneWidget);
+      expect(find.text('Shop Assistant'), findsNothing);
+      expect(find.text('Delivery Driver'), findsNothing);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('job-search-field')),
+        '  sEoUl  ',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cafe Assistant'), findsOneWidget);
+      expect(find.text('Shop Assistant'), findsNothing);
+      expect(find.text('Delivery Driver'), findsNothing);
+    },
+  );
+
+  testWidgets('filters jobs by selected location', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StudentJobListingsScreen(jobsStream: Stream.value(testJobs)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('job-location-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Busan').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Shop Assistant'), findsOneWidget);
+    expect(find.text('Delivery Driver'), findsOneWidget);
+    expect(find.text('Cafe Assistant'), findsNothing);
+  });
+
+  testWidgets('combines search and location filters', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StudentJobListingsScreen(jobsStream: Stream.value(testJobs)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('job-search-field')),
+      'assistant',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('job-location-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Busan').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Shop Assistant'), findsOneWidget);
+    expect(find.text('Cafe Assistant'), findsNothing);
+    expect(find.text('Delivery Driver'), findsNothing);
+  });
+
+  testWidgets('clears search and location filters', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StudentJobListingsScreen(jobsStream: Stream.value(testJobs)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('job-search-field')),
+      'no match',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('No matching jobs'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('clear-job-filters')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No matching jobs'), findsNothing);
+    expect(find.text('All Locations'), findsOneWidget);
+    expect(find.byKey(const ValueKey('clear-job-filters')), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('job-search-field')),
+      'delivery',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Delivery Driver'), findsOneWidget);
   });
 }

@@ -14,6 +14,18 @@ class StudentJobListingsScreen extends StatefulWidget {
 class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
   late final Stream<List<StudentJobListing>> _jobsStream =
       widget.jobsStream ?? _watchJobs();
+  final _searchController = TextEditingController();
+
+  static const _allLocations = 'All Locations';
+
+  String _searchQuery = '';
+  String _selectedLocation = _allLocations;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Stream<List<StudentJobListing>> _watchJobs() {
     return FirebaseFirestore.instance
@@ -75,6 +87,24 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
               final horizontalPadding = constraints.maxWidth < 360
                   ? 20.0
                   : 28.0;
+              final locations = _locationsFor(jobs);
+              final selectedLocation = locations.contains(_selectedLocation)
+                  ? _selectedLocation
+                  : _allLocations;
+              final normalizedQuery = _searchQuery.trim().toLowerCase();
+              final filteredJobs = jobs
+                  .where((job) {
+                    final matchesSearch =
+                        normalizedQuery.isEmpty ||
+                        job.title.toLowerCase().contains(normalizedQuery) ||
+                        job.location.toLowerCase().contains(normalizedQuery);
+                    final matchesLocation =
+                        selectedLocation == _allLocations ||
+                        job.location.trim().toLowerCase() ==
+                            selectedLocation.toLowerCase();
+                    return matchesSearch && matchesLocation;
+                  })
+                  .toList(growable: false);
 
               return ListView.separated(
                 padding: EdgeInsets.fromLTRB(
@@ -83,7 +113,7 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
                   horizontalPadding,
                   32,
                 ),
-                itemCount: jobs.length + 1,
+                itemCount: filteredJobs.isEmpty ? 1 : filteredJobs.length + 1,
                 separatorBuilder: (_, index) =>
                     SizedBox(height: index == 0 ? 16 : 12),
                 itemBuilder: (context, index) {
@@ -91,23 +121,120 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
                     return Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 480),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Available jobs',
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(
-                                  color: const Color(0xFF173B27),
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: -0.5,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Available jobs',
+                              style: Theme.of(context).textTheme.headlineSmall
+                                  ?.copyWith(
+                                    color: const Color(0xFF173B27),
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: -0.5,
+                                  ),
+                            ),
+                            const SizedBox(height: 16),
+                            TextField(
+                              key: const ValueKey('job-search-field'),
+                              controller: _searchController,
+                              textInputAction: TextInputAction.search,
+                              onChanged: (value) =>
+                                  setState(() => _searchQuery = value),
+                              decoration: InputDecoration(
+                                labelText: 'Search by title or location',
+                                prefixIcon: const Icon(
+                                  Icons.search_rounded,
+                                  color: Color(0xFF64816D),
                                 ),
-                          ),
+                                filled: true,
+                                fillColor: Colors.white,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFFDCE8DF),
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFFDCE8DF),
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFF247545),
+                                    width: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                              key: const ValueKey('job-location-filter'),
+                              initialValue: selectedLocation,
+                              decoration: InputDecoration(
+                                labelText: 'Location',
+                                prefixIcon: const Icon(
+                                  Icons.location_on_outlined,
+                                  color: Color(0xFF64816D),
+                                ),
+                                filled: true,
+                                fillColor: Colors.white,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFFDCE8DF),
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFFDCE8DF),
+                                  ),
+                                ),
+                              ),
+                              items: [_allLocations, ...locations]
+                                  .map((location) {
+                                    return DropdownMenuItem(
+                                      value: location,
+                                      child: Text(location),
+                                    );
+                                  })
+                                  .toList(growable: false),
+                              onChanged: (location) {
+                                if (location != null) {
+                                  setState(() => _selectedLocation = location);
+                                }
+                              },
+                            ),
+                            if (_searchQuery.trim().isNotEmpty ||
+                                selectedLocation != _allLocations) ...[
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  key: const ValueKey('clear-job-filters'),
+                                  onPressed: _clearFilters,
+                                  icon: const Icon(Icons.clear_all_rounded),
+                                  label: const Text('Clear filters'),
+                                ),
+                              ),
+                            ],
+                            if (filteredJobs.isEmpty) ...[
+                              const SizedBox(height: 32),
+                              const _ListingsState(
+                                icon: Icons.search_off_rounded,
+                                title: 'No matching jobs',
+                                message: 'Try changing or clearing your search and location filters.',
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     );
                   }
 
-                  final job = jobs[index - 1];
+                  final job = filteredJobs[index - 1];
                   return Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 480),
@@ -128,6 +255,26 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
         },
       ),
     );
+  }
+
+  List<String> _locationsFor(List<StudentJobListing> jobs) {
+    final locationsByKey = <String, String>{};
+    for (final job in jobs) {
+      final location = job.location.trim();
+      if (location.isEmpty || location == 'Not provided') continue;
+      locationsByKey.putIfAbsent(location.toLowerCase(), () => location);
+    }
+
+    final locations = locationsByKey.values.toList()..sort();
+    return locations;
+  }
+
+  void _clearFilters() {
+    _searchController.clear();
+    setState(() {
+      _searchQuery = '';
+      _selectedLocation = _allLocations;
+    });
   }
 
   String _errorMessage(Object? error) {
