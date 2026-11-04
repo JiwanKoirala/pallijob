@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:pallijob/screens/auth/welcome_screen.dart';
+import 'package:pallijob/screens/employer/manage_jobs_screen.dart';
 import 'package:pallijob/screens/employer/post_job_screen.dart';
 
 class EmployerDashboardScreen extends StatelessWidget {
@@ -97,13 +98,19 @@ class EmployerDashboardScreen extends StatelessWidget {
                       for (final module in _modules) ...[
                         _ModuleCard(
                           module: module,
-                          onTap: module.title == 'Post Job'
-                              ? () => Navigator.of(context).push(
-                                  MaterialPageRoute<void>(
-                                    builder: (_) => const PostJobScreen(),
-                                  ),
-                                )
-                              : null,
+                          onTap: switch (module.title) {
+                            'Post Job' => () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const PostJobScreen(),
+                              ),
+                            ),
+                            'Manage Jobs' => () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const ManageJobsScreen(),
+                              ),
+                            ),
+                            _ => null,
+                          },
                         ),
                         if (module != _modules.last) const SizedBox(height: 12),
                       ],
