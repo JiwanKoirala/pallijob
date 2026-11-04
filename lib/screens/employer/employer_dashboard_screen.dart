@@ -1,0 +1,209 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:pallijob/screens/auth/welcome_screen.dart';
+
+class EmployerDashboardScreen extends StatelessWidget {
+  const EmployerDashboardScreen({super.key});
+
+  static const _modules = [
+    _DashboardModule(
+      title: 'Post Job',
+      description: 'Create a new job listing',
+      icon: Icons.add_circle_outline_rounded,
+    ),
+    _DashboardModule(
+      title: 'Manage Jobs',
+      description: 'Review and update your job listings',
+      icon: Icons.work_outline_rounded,
+    ),
+    _DashboardModule(
+      title: 'View Applications',
+      description: 'Review applications from students',
+      icon: Icons.assignment_outlined,
+    ),
+    _DashboardModule(
+      title: 'Messages',
+      description: 'Your conversations will appear here',
+      icon: Icons.chat_bubble_outline_rounded,
+    ),
+    _DashboardModule(
+      title: 'My Profile',
+      description: 'Manage your employer profile',
+      icon: Icons.person_outline_rounded,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FBF8),
+      appBar: AppBar(
+        title: const Text(
+          'PalliJob',
+          style: TextStyle(
+            color: Color(0xFF173B27),
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.5,
+          ),
+        ),
+        backgroundColor: const Color(0xFFF8FBF8),
+        surfaceTintColor: Colors.transparent,
+        actions: [
+          IconButton(
+            tooltip: 'Log out',
+            onPressed: () => _signOut(context),
+            icon: const Icon(Icons.logout_rounded),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        top: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final horizontalPadding = constraints.maxWidth < 360 ? 20.0 : 28.0;
+
+            return SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                20,
+                horizontalPadding,
+                32,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Welcome, Employer!',
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(
+                              color: const Color(0xFF173B27),
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.5,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'What would you like to do today?',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: const Color(0xFF647369),
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      for (final module in _modules) ...[
+                        _ModuleCard(module: module),
+                        if (module != _modules.last)
+                          const SizedBox(height: 12),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _signOut(BuildContext context) async {
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not log out. Please try again.')),
+      );
+      return;
+    }
+
+    if (!context.mounted) return;
+    Navigator.of(context).pushAndRemoveUntil<void>(
+      MaterialPageRoute<void>(builder: (_) => const WelcomeScreen()),
+      (_) => false,
+    );
+  }
+}
+
+class _DashboardModule {
+  const _DashboardModule({
+    required this.title,
+    required this.description,
+    required this.icon,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+}
+
+class _ModuleCard extends StatelessWidget {
+  const _ModuleCard({required this.module});
+
+  final _DashboardModule module;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: Color(0xFFE5EEE7)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF4ED),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Icon(
+                module.icon,
+                color: const Color(0xFF247545),
+                size: 25,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    module.title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: const Color(0xFF173B27),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    module.description,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF647369),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Coming soon',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: const Color(0xFF247545),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

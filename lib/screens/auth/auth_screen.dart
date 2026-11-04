@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:pallijob/screens/employer/employer_dashboard_screen.dart';
 import 'package:pallijob/screens/student/student_dashboard_screen.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -377,7 +378,7 @@ class _AuthScreenState extends State<AuthScreen> {
           isNewProfile: false,
         );
         if (!mounted) return;
-        _showSuccess(isRegistration: true, isProfileRepair: true);
+        _showSuccess();
         return;
       }
 
@@ -406,7 +407,7 @@ class _AuthScreenState extends State<AuthScreen> {
         }
 
         if (!mounted) return;
-        _showSuccess(isRegistration: true);
+        _showSuccess();
         return;
       }
 
@@ -464,7 +465,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
 
       if (!mounted) return;
-      _showSuccess(isRegistration: false);
+      _showSuccess();
     } on FirebaseAuthException catch (error) {
       _showMessage(_authErrorMessage(error));
     } on FirebaseException {
@@ -500,10 +501,7 @@ class _AuthScreenState extends State<AuthScreen> {
         .set(profile, SetOptions(merge: true));
   }
 
-  void _showSuccess({
-    required bool isRegistration,
-    bool isProfileRepair = false,
-  }) {
+  void _showSuccess() {
     if (_isStudent) {
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute<void>(
@@ -514,14 +512,11 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
 
-    Navigator.of(context).pushReplacement(
+    Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(
-        builder: (_) => _AuthSuccessScreen(
-          role: widget.role,
-          isRegistration: isRegistration,
-          isProfileRepair: isProfileRepair,
-        ),
+        builder: (_) => const EmployerDashboardScreen(),
       ),
+      (_) => false,
     );
   }
 
@@ -596,89 +591,6 @@ class _ModeSelector extends StatelessWidget {
               textStyle: const TextStyle(fontWeight: FontWeight.w600),
             ),
             child: Text(label),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AuthSuccessScreen extends StatelessWidget {
-  const _AuthSuccessScreen({
-    required this.role,
-    required this.isRegistration,
-    this.isProfileRepair = false,
-  });
-
-  final String role;
-  final bool isRegistration;
-  final bool isProfileRepair;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FBF8),
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(28),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 76,
-                    height: 76,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE5F2E9),
-                      borderRadius: BorderRadius.circular(26),
-                    ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      color: Color(0xFF247545),
-                      size: 42,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    isProfileRepair
-                        ? 'Profile completed!'
-                        : isRegistration
-                        ? 'Account created!'
-                        : 'You’re logged in!',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: const Color(0xFF173B27),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Your $role account is ready. More features are coming soon.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyLarge
-                        ?.copyWith(color: const Color(0xFF647369), height: 1.5),
-                  ),
-                  const SizedBox(height: 28),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: FilledButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF247545),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: const Text('Done'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
         ),
       ),

@@ -1,4 +1,6 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:pallijob/screens/auth/welcome_screen.dart';
 
 class StudentDashboardScreen extends StatelessWidget {
   const StudentDashboardScreen({super.key});
@@ -41,6 +43,13 @@ class StudentDashboardScreen extends StatelessWidget {
         ),
         backgroundColor: const Color(0xFFF8FBF8),
         surfaceTintColor: Colors.transparent,
+        actions: [
+          IconButton(
+            tooltip: 'Log out',
+            onPressed: () => _signOut(context),
+            icon: const Icon(Icons.logout_rounded),
+          ),
+        ],
       ),
       body: SafeArea(
         top: false,
@@ -92,6 +101,24 @@ class StudentDashboardScreen extends StatelessWidget {
           },
         ),
       ),
+    );
+  }
+
+  Future<void> _signOut(BuildContext context) async {
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not log out. Please try again.')),
+      );
+      return;
+    }
+
+    if (!context.mounted) return;
+    Navigator.of(context).pushAndRemoveUntil<void>(
+      MaterialPageRoute<void>(builder: (_) => const WelcomeScreen()),
+      (_) => false,
     );
   }
 }
