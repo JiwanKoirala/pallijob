@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:pallijob/screens/auth/welcome_screen.dart';
+import 'package:pallijob/screens/employer/post_job_screen.dart';
 
 class EmployerDashboardScreen extends StatelessWidget {
   const EmployerDashboardScreen({super.key});
@@ -94,9 +95,17 @@ class EmployerDashboardScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 24),
                       for (final module in _modules) ...[
-                        _ModuleCard(module: module),
-                        if (module != _modules.last)
-                          const SizedBox(height: 12),
+                        _ModuleCard(
+                          module: module,
+                          onTap: module.title == 'Post Job'
+                              ? () => Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => const PostJobScreen(),
+                                  ),
+                                )
+                              : null,
+                        ),
+                        if (module != _modules.last) const SizedBox(height: 12),
                       ],
                     ],
                   ),
@@ -141,9 +150,10 @@ class _DashboardModule {
 }
 
 class _ModuleCard extends StatelessWidget {
-  const _ModuleCard({required this.module});
+  const _ModuleCard({required this.module, this.onTap});
 
   final _DashboardModule module;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -154,54 +164,64 @@ class _ModuleCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         side: const BorderSide(color: Color(0xFFE5EEE7)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: const Color(0xFFEAF4ED),
-                borderRadius: BorderRadius.circular(15),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF4ED),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(
+                  module.icon,
+                  color: const Color(0xFF247545),
+                  size: 25,
+                ),
               ),
-              child: Icon(
-                module.icon,
-                color: const Color(0xFF247545),
-                size: 25,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      module.title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: const Color(0xFF173B27),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      module.description,
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: const Color(0xFF647369)),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      onTap == null ? 'Coming soon' : 'Tap to open',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: const Color(0xFF247545),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    module.title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: const Color(0xFF173B27),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    module.description,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF647369),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Coming soon',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: const Color(0xFF247545),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+              if (onTap != null) ...[
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFF247545),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
