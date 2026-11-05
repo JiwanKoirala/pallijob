@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:pallijob/screens/auth/welcome_screen.dart';
+import 'package:pallijob/screens/student/student_applications_screen.dart';
 import 'package:pallijob/screens/student/student_job_listings_screen.dart';
 
 class StudentDashboardScreen extends StatelessWidget {
@@ -97,6 +98,13 @@ class StudentDashboardScreen extends StatelessWidget {
                                   MaterialPageRoute<void>(
                                     builder: (_) =>
                                         const StudentJobListingsScreen(),
+                                  ),
+                                )
+                              : module.title == 'My Applications'
+                              ? () => Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) =>
+                                        const StudentApplicationsScreen(),
                                   ),
                                 )
                               : null,

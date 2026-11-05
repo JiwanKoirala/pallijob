@@ -110,6 +110,12 @@ service cloud.firestore {
             && resource.data.studentId == request.auth.uid)
         );
 
+      // Students can list only their own applications.
+      allow list: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
+        && resource.data.studentId == request.auth.uid;
+
       // Each student can create only one pending application per existing job.
       allow create: if request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
