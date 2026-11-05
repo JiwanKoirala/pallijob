@@ -1,10 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:pallijob/screens/student/job_application_service.dart';
 
 class StudentJobListingsScreen extends StatefulWidget {
-  const StudentJobListingsScreen({super.key, this.jobsStream});
+  const StudentJobListingsScreen({
+    super.key,
+    this.jobsStream,
+    this.applicationService = const FirestoreJobApplicationService(),
+  });
 
   final Stream<List<StudentJobListing>>? jobsStream;
+  final JobApplicationService applicationService;
 
   @override
   State<StudentJobListingsScreen> createState() =>
@@ -242,7 +248,10 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
                         job: job,
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
-                            builder: (_) => StudentJobDetailsScreen(job: job),
+                            builder: (_) => StudentJobDetailsScreen(
+                              job: job,
+                              applicationService: widget.applicationService,
+                            ),
                           ),
                         ),
                       ),
@@ -336,10 +345,30 @@ class StudentJobListing {
   }
 }
 
-class StudentJobDetailsScreen extends StatelessWidget {
-  const StudentJobDetailsScreen({super.key, required this.job});
+class StudentJobDetailsScreen extends StatefulWidget {
+  const StudentJobDetailsScreen({
+    super.key,
+    required this.job,
+    this.applicationService = const FirestoreJobApplicationService(),
+  });
 
   final StudentJobListing job;
+  final JobApplicationService applicationService;
+
+  @override
+  State<StudentJobDetailsScreen> createState() =>
+      _StudentJobDetailsScreenState();
+}
+
+class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
+  late Future<JobApplicationStatus> _applicationStatus;
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _applicationStatus = widget.applicationService.getStatus(widget.job.id);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -377,7 +406,7 @@ class StudentJobDetailsScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        job.title,
+                        widget.job.title,
                         style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(
                               color: const Color(0xFF173B27),
@@ -397,7 +426,7 @@ class StudentJobDetailsScreen extends StatelessWidget {
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
-                              job.location,
+                              widget.job.location,
                               style: Theme.of(context).textTheme.bodyLarge
                                   ?.copyWith(color: const Color(0xFF647369)),
                             ),
@@ -407,23 +436,25 @@ class StudentJobDetailsScreen extends StatelessWidget {
                       const SizedBox(height: 24),
                       _JobDetailSection(
                         title: 'Description',
-                        content: job.description,
+                        content: widget.job.description,
                       ),
                       const SizedBox(height: 16),
                       _JobDetailSection(
                         title: 'Requirements',
-                        content: job.requirements,
+                        content: widget.job.requirements,
                       ),
                       const SizedBox(height: 16),
                       _JobDetailSection(
                         title: 'Employer ID',
-                        content: job.employerId,
+                        content: widget.job.employerId,
                       ),
                       const SizedBox(height: 16),
                       _JobDetailSection(
                         title: 'Posted',
-                        content: _formatDate(job.createdAt),
+                        content: _formatDate(widget.job.createdAt),
                       ),
+                      const SizedBox(height: 24),
+                      _applyButton(),
                     ],
                   ),
                 ),
@@ -433,6 +464,173 @@ class StudentJobDetailsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _applyButton() {
+    return FutureBuilder<JobApplicationStatus>(
+      future: _applicationStatus,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                _applicationStatusError(snapshot.error),
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: const Color(0xFF9B2C2C)),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: () {
+                  setState(() {
+                    _applicationStatus = widget.applicationService.getStatus(
+                      widget.job.id,
+                    );
+                  });
+                },
+                child: const Text('Retry'),
+              ),
+            ],
+          );
+        }
+
+        if (!snapshot.hasData) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFF247545)),
+          );
+        }
+
+        final status = snapshot.data!;
+        if (status == JobApplicationStatus.alreadyApplied) {
+          return FilledButton.icon(
+            onPressed: null,
+            icon: const Icon(Icons.check_circle_outline_rounded),
+            label: const Text('Applied'),
+          );
+        }
+        if (status == JobApplicationStatus.unauthenticated ||
+            status == JobApplicationStatus.studentRoleRequired) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                status == JobApplicationStatus.unauthenticated
+                    ? 'Sign in with a student account to apply.'
+                    : 'Only student accounts can apply for jobs.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: const Color(0xFF647369)),
+              ),
+              const SizedBox(height: 12),
+              FilledButton(onPressed: null, child: const Text('Apply for Job')),
+            ],
+          );
+        }
+
+        return SizedBox(
+          height: 54,
+          child: FilledButton.icon(
+            key: const ValueKey('apply-for-job'),
+            onPressed: _isSubmitting ? null : _confirmApplication,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF247545),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            icon: _isSubmitting
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.send_outlined),
+            label: Text(_isSubmitting ? 'Applying…' : 'Apply for Job'),
+          ),
+        );
+      },
+    );
+  }
+
+  String _applicationStatusError(Object? error) {
+    if (error is FirebaseException && error.code == 'permission-denied') {
+      return 'Could not verify your application status. Check that you are signed in as a student and application read rules are deployed.';
+    }
+    return 'Could not verify your application status. Please check your connection and try again.';
+  }
+
+  Future<void> _confirmApplication() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Apply for this job?'),
+        content: Text('Submit an application for "${widget.job.title}"?'),
+        actions: [
+          TextButton(
+            key: const ValueKey('cancel-job-application'),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-job-application'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted || _isSubmitting) return;
+
+    setState(() => _isSubmitting = true);
+    try {
+      await widget.applicationService.apply(widget.job.id);
+      if (!mounted) return;
+      setState(() {
+        _applicationStatus = Future.value(JobApplicationStatus.alreadyApplied);
+      });
+      _showApplicationMessage('Application submitted successfully.');
+    } on JobApplicationException catch (error) {
+      if (!mounted) return;
+      _showApplicationMessage(error.message, isError: true);
+      if (error is JobAlreadyAppliedException) {
+        setState(() {
+          _applicationStatus = Future.value(
+            JobApplicationStatus.alreadyApplied,
+          );
+        });
+      }
+    } on FirebaseException catch (error) {
+      if (!mounted) return;
+      _showApplicationMessage(_firebaseApplicationError(error), isError: true);
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  String _firebaseApplicationError(FirebaseException error) {
+    return switch (error.code) {
+      'permission-denied' => 'Your application was denied. Sign in with a student account and make sure the application Firestore rules are deployed.',
+      'already-exists' => 'You have already applied for this job.',
+      'unavailable' || 'network-request-failed' =>
+        'Could not reach Firebase. Check your connection and try again.',
+      _ =>
+        'Could not submit your application${error.message == null ? '.' : ': ${error.message}'}',
+    };
+  }
+
+  void _showApplicationMessage(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isError ? const Color(0xFF9B2C2C) : null,
+        ),
+      );
   }
 
   String _formatDate(DateTime? date) {

@@ -99,5 +99,40 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employer'
         && resource.data.employerId == request.auth.uid;
     }
+
+    match /applications/{applicationId} {
+      // Students can read only their own application documents.
+      allow get: if request.auth != null
+        && (
+          (resource == null
+            && applicationId.matches('.*_' + request.auth.uid + '$'))
+          || (resource != null
+            && resource.data.studentId == request.auth.uid)
+        );
+
+      // Each student can create only one pending application per existing job.
+      allow create: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
+        && request.resource.data.keys().hasAll([
+          'jobId',
+          'studentId',
+          'status',
+          'dateApplied'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'jobId',
+          'studentId',
+          'status',
+          'dateApplied'
+        ])
+        && request.resource.data.jobId is string
+        && request.resource.data.jobId.size() > 0
+        && request.resource.data.studentId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.dateApplied == request.time
+        && applicationId == request.resource.data.jobId + '_' + request.auth.uid
+        && exists(/databases/$(database)/documents/jobs/$(request.resource.data.jobId));
+    }
   }
 }
