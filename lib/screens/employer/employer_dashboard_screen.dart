@@ -1,11 +1,14 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:pallijob/screens/auth/welcome_screen.dart';
+import 'package:pallijob/screens/employer/employer_applications_screen.dart';
 import 'package:pallijob/screens/employer/manage_jobs_screen.dart';
 import 'package:pallijob/screens/employer/post_job_screen.dart';
 
 class EmployerDashboardScreen extends StatelessWidget {
-  const EmployerDashboardScreen({super.key});
+  const EmployerDashboardScreen({super.key, this.applicationsService});
+
+  final EmployerApplicationsService? applicationsService;
 
   static const _modules = [
     _DashboardModule(
@@ -109,6 +112,14 @@ class EmployerDashboardScreen extends StatelessWidget {
                                 builder: (_) => const ManageJobsScreen(),
                               ),
                             ),
+                            'View Applications' =>
+                              () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => EmployerApplicationsScreen(
+                                    applicationsService: applicationsService,
+                                  ),
+                                ),
+                              ),
                             _ => null,
                           },
                         ),
@@ -209,7 +220,7 @@ class _ModuleCard extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: const Color(0xFF647369)),
                     ),
-                  const SizedBox(height: 6),
+                    const SizedBox(height: 6),
                     Text(
                       onTap == null ? 'Coming soon' : 'Tap to open',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(

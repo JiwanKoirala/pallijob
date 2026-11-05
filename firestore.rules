@@ -101,20 +101,33 @@ service cloud.firestore {
     }
 
     match /applications/{applicationId} {
-      // Students can read only their own application documents.
+      function isEmployerForApplication() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employer'
+          && resource.data.employerId == request.auth.uid;
+      }
+
+      // Students can read only their own documents; employers only their jobs' applications.
       allow get: if request.auth != null
         && (
           (resource == null
             && applicationId.matches('.*_' + request.auth.uid + '$'))
           || (resource != null
             && resource.data.studentId == request.auth.uid)
+          || isEmployerForApplication()
         );
 
-      // Students can list only their own applications.
+      // Student and employer queries must constrain the matching ownership field.
       allow list: if request.auth != null
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
-        && resource.data.studentId == request.auth.uid;
+        && (
+          (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
+            && resource.data.studentId == request.auth.uid
+          )
+          || isEmployerForApplication()
+        );
 
       // Each student can create only one pending application per existing job.
       allow create: if request.auth != null
@@ -123,22 +136,27 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll([
           'jobId',
           'studentId',
+          'employerId',
           'status',
           'dateApplied'
         ])
         && request.resource.data.keys().hasOnly([
           'jobId',
           'studentId',
+          'employerId',
           'status',
           'dateApplied'
         ])
         && request.resource.data.jobId is string
         && request.resource.data.jobId.size() > 0
         && request.resource.data.studentId == request.auth.uid
+        && exists(/databases/$(database)/documents/jobs/$(request.resource.data.jobId))
+        && request.resource.data.employerId is string
+        && request.resource.data.employerId ==
+           get(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.employerId
         && request.resource.data.status == 'pending'
         && request.resource.data.dateApplied == request.time
-        && applicationId == request.resource.data.jobId + '_' + request.auth.uid
-        && exists(/databases/$(database)/documents/jobs/$(request.resource.data.jobId));
+        && applicationId == request.resource.data.jobId + '_' + request.auth.uid;
     }
   }
 }

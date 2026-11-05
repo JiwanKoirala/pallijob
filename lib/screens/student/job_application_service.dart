@@ -76,10 +76,17 @@ class FirestoreJobApplicationService implements JobApplicationService {
       if (!job.exists) {
         throw const JobApplicationException('This job is no longer available.');
       }
+      final employerId = job.data()?['employerId'];
+      if (employerId is! String || employerId.trim().isEmpty) {
+        throw const JobApplicationException(
+          'This job is missing its employer information and cannot accept applications.',
+        );
+      }
 
       transaction.set(application, {
         'jobId': jobId,
         'studentId': user.uid,
+        'employerId': employerId,
         'status': 'pending',
         'dateApplied': FieldValue.serverTimestamp(),
       });
