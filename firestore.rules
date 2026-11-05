@@ -92,6 +92,12 @@ service cloud.firestore {
         && request.resource.data.location.size() > 0
         && request.resource.data.requirements is string
         && request.resource.data.requirements.size() > 0;
+
+      // Employers can delete only their own job documents.
+      allow delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employer'
+        && resource.data.employerId == request.auth.uid;
     }
   }
 }

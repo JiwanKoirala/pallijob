@@ -209,7 +209,7 @@ class _ModuleCard extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: const Color(0xFF647369)),
                     ),
-                    const SizedBox(height: 6),
+                  const SizedBox(height: 6),
                     Text(
                       onTap == null ? 'Coming soon' : 'Tap to open',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(

@@ -5,9 +5,10 @@ import 'package:pallijob/screens/employer/edit_job_screen.dart';
 import 'package:pallijob/screens/student/student_job_listings_screen.dart';
 
 class ManageJobsScreen extends StatefulWidget {
-  const ManageJobsScreen({super.key, this.jobsStream});
+  const ManageJobsScreen({super.key, this.jobsStream, this.deleteJob});
 
   final Stream<List<StudentJobListing>>? jobsStream;
+  final Future<void> Function(StudentJobListing job)? deleteJob;
 
   @override
   State<ManageJobsScreen> createState() => _ManageJobsScreenState();
@@ -18,6 +19,7 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
       ? FirebaseAuth.instance.currentUser?.uid
       : null;
   late final Stream<List<StudentJobListing>>? _jobsStream = _createJobsStream();
+  final Set<String> _deletingJobIds = {};
 
   Stream<List<StudentJobListing>>? _createJobsStream() {
     final suppliedStream = widget.jobsStream;
@@ -158,6 +160,8 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
                                   builder: (_) => EditJobScreen(job: job),
                                 ),
                               ),
+                              isDeleting: _deletingJobIds.contains(job.id),
+                              onDelete: () => _confirmDeleteJob(job),
                             ),
                           ),
                         );
@@ -181,6 +185,137 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
     }
     return 'Something went wrong while loading your jobs. Please try again later.';
   }
+
+  Future<void> _confirmDeleteJob(StudentJobListing job) async {
+    if (_deletingJobIds.contains(job.id)) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete job?'),
+        content: Text(
+          'Are you sure you want to delete "${job.title}"? This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            key: ValueKey('cancel-delete-job-${job.id}'),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: ValueKey('confirm-delete-job-${job.id}'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF9B2C2C),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    await _deleteJob(job);
+  }
+
+  Future<void> _deleteJob(StudentJobListing job) async {
+    if (_deletingJobIds.contains(job.id)) return;
+    setState(() => _deletingJobIds.add(job.id));
+
+    try {
+      final injectedDelete = widget.deleteJob;
+      if (injectedDelete != null) {
+        await injectedDelete(job);
+      } else {
+        final auth = FirebaseAuth.instance;
+        final user = auth.currentUser;
+        if (user == null) {
+          _showDeleteMessage(
+            'You must be signed in as the job owner to delete this job.',
+            isError: true,
+          );
+          return;
+        }
+
+        final profile = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        if (!mounted) return;
+        if (!profile.exists || profile.data()?['role'] != 'employer') {
+          _showDeleteMessage(
+            'Only employer accounts can delete jobs.',
+            isError: true,
+          );
+          return;
+        }
+
+        final jobReference = FirebaseFirestore.instance
+            .collection('jobs')
+            .doc(job.id);
+        final jobSnapshot = await jobReference.get();
+        if (!mounted) return;
+        if (!jobSnapshot.exists) {
+          _showDeleteMessage('This job no longer exists.', isError: true);
+          return;
+        }
+        if (jobSnapshot.data()?['employerId'] != user.uid ||
+            job.employerId != user.uid) {
+          _showDeleteMessage(
+            'You can only delete jobs posted by your account.',
+            isError: true,
+          );
+          return;
+        }
+        if (auth.currentUser?.uid != user.uid) {
+          _showDeleteMessage(
+            'Your session expired. Please sign in again.',
+            isError: true,
+          );
+          return;
+        }
+
+        await jobReference.delete();
+      }
+
+      if (!mounted) return;
+      _showDeleteMessage('Job deleted successfully.', isError: false);
+    } on FirebaseException catch (error) {
+      if (!mounted) return;
+      _showDeleteMessage(_deleteErrorMessage(error), isError: true);
+    } catch (_) {
+      if (!mounted) return;
+      _showDeleteMessage(
+        'Could not delete the job. Please try again.',
+        isError: true,
+      );
+    } finally {
+      if (mounted) setState(() => _deletingJobIds.remove(job.id));
+    }
+  }
+
+  String _deleteErrorMessage(FirebaseException error) {
+    return switch (error.code) {
+      'permission-denied' => 'Firestore denied this deletion. Confirm you own this job, are signed in as an employer, and that the delete rules are deployed.',
+      'not-found' => 'This job no longer exists.',
+      'unavailable' || 'network-request-failed' =>
+        'Could not reach Firebase. Check your connection and try again.',
+      _ =>
+        'Could not delete the job${error.message == null ? '.' : ': ${error.message}'}',
+    };
+  }
+
+  void _showDeleteMessage(String message, {required bool isError}) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isError ? const Color(0xFF9B2C2C) : null,
+        ),
+      );
+  }
 }
 
 class _EmployerJobCard extends StatelessWidget {
@@ -188,11 +323,15 @@ class _EmployerJobCard extends StatelessWidget {
     required this.job,
     required this.onTap,
     required this.onEdit,
+    required this.onDelete,
+    required this.isDeleting,
   });
 
   final StudentJobListing job;
   final VoidCallback onTap;
   final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final bool isDeleting;
 
   @override
   Widget build(BuildContext context) {
@@ -203,73 +342,90 @@ class _EmployerJobCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         side: const BorderSide(color: Color(0xFFE5EEE7)),
       ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: onTap,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    job.title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: const Color(0xFF173B27),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
                     children: [
-                      Text(
-                        job.title,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: const Color(0xFF173B27),
-                              fontWeight: FontWeight.w600,
-                            ),
+                      const Icon(
+                        Icons.location_on_outlined,
+                        color: Color(0xFF247545),
+                        size: 17,
                       ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.location_on_outlined,
-                            color: Color(0xFF247545),
-                            size: 17,
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              job.location,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: const Color(0xFF647369)),
-                            ),
-                          ),
-                          const Icon(
-                            Icons.chevron_right_rounded,
-                            color: Color(0xFF247545),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        job.description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF647369),
-                          height: 1.4,
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          job.location,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: const Color(0xFF647369)),
                         ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: Color(0xFF247545),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  Text(
+                    job.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(color: const Color(0xFF647369), height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              children: [
+                TextButton.icon(
+                  key: ValueKey('edit-job-${job.id}'),
+                  onPressed: isDeleting ? null : onEdit,
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Edit'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF247545),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                key: ValueKey('edit-job-${job.id}'),
-                tooltip: 'Edit ${job.title}',
-                onPressed: onEdit,
-                icon: const Icon(Icons.edit_outlined, color: Color(0xFF247545)),
-              ),
-            ],
-          ),
+                TextButton.icon(
+                  key: ValueKey('delete-job-${job.id}'),
+                  onPressed: isDeleting ? null : onDelete,
+                  icon: isDeleting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.delete_outline_rounded),
+                  label: Text(isDeleting ? 'Deleting…' : 'Delete'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF9B2C2C),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
