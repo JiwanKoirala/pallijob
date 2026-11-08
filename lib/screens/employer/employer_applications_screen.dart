@@ -22,8 +22,15 @@ class EmployerApplication {
   final bool jobUnavailable;
 }
 
+enum EmployerApplicationDecision { accepted, rejected }
+
 abstract interface class EmployerApplicationsService {
   Future<List<EmployerApplication>> loadApplications();
+
+  Future<void> updateStatus(
+    String applicationId,
+    EmployerApplicationDecision decision,
+  );
 }
 
 class FirestoreEmployerApplicationsService
@@ -96,10 +103,88 @@ class FirestoreEmployerApplicationsService
     return applications;
   }
 
+  @override
+  Future<void> updateStatus(
+    String applicationId,
+    EmployerApplicationDecision decision,
+  ) async {
+    final auth = FirebaseAuth.instance;
+    final user = auth.currentUser;
+    if (user == null) {
+      throw const EmployerApplicationDecisionException(
+        'Sign in with an employer account to update applications.',
+      );
+    }
+
+    final firestore = FirebaseFirestore.instance;
+    final profileReference = firestore.collection('users').doc(user.uid);
+    final applicationReference = firestore
+        .collection('applications')
+        .doc(applicationId);
+
+    await firestore.runTransaction((transaction) async {
+      final profile = await transaction.get(profileReference);
+      if (profile.data()?['role'] != 'employer') {
+        throw const EmployerApplicationDecisionException(
+          'Only employer accounts can update applications.',
+        );
+      }
+
+      final application = await transaction.get(applicationReference);
+      final data = application.data();
+      if (data == null) {
+        throw const EmployerApplicationDecisionException(
+          'This application no longer exists.',
+        );
+      }
+      if (data['status'] != 'pending') {
+        throw const EmployerApplicationDecisionException(
+          'Only pending applications can be updated.',
+        );
+      }
+      if (data['employerId'] != user.uid) {
+        throw const EmployerApplicationDecisionException(
+          'You can only update applications for your own jobs.',
+        );
+      }
+
+      final jobId = data['jobId'];
+      if (jobId is! String || jobId.trim().isEmpty) {
+        throw const EmployerApplicationDecisionException(
+          'This application has invalid job information.',
+        );
+      }
+      final job = await transaction.get(
+        firestore.collection('jobs').doc(jobId),
+      );
+      if (job.data()?['employerId'] != user.uid) {
+        throw const EmployerApplicationDecisionException(
+          'You can only update applications for jobs you own.',
+        );
+      }
+      if (auth.currentUser?.uid != user.uid) {
+        throw const EmployerApplicationDecisionException(
+          'Your session changed. Please sign in again.',
+        );
+      }
+
+      transaction.update(applicationReference, {'status': decision.name});
+    });
+  }
+
   static String _textValue(Object? value, {String fallback = ''}) {
     if (value is! String || value.trim().isEmpty) return fallback;
     return value.trim();
   }
+}
+
+class EmployerApplicationDecisionException implements Exception {
+  const EmployerApplicationDecisionException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }
 
 class EmployerApplicationsException implements Exception {
@@ -124,6 +209,7 @@ class EmployerApplicationsScreen extends StatefulWidget {
 class _EmployerApplicationsScreenState
     extends State<EmployerApplicationsScreen> {
   late Future<List<EmployerApplication>> _applicationsFuture;
+  final Set<String> _updatingApplicationIds = {};
 
   EmployerApplicationsService get _service =>
       widget.applicationsService ??
@@ -200,8 +286,17 @@ class _EmployerApplicationsScreenState
                 ),
                 itemCount: applications.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemBuilder: (context, index) =>
-                    _EmployerApplicationCard(application: applications[index]),
+                itemBuilder: (context, index) {
+                  final application = applications[index];
+                  return _EmployerApplicationCard(
+                    application: application,
+                    isUpdating: _updatingApplicationIds.contains(
+                      application.id,
+                    ),
+                    onDecision: (decision) =>
+                        _confirmDecision(application, decision),
+                  );
+                },
               );
             },
           );
@@ -209,12 +304,109 @@ class _EmployerApplicationsScreenState
       ),
     );
   }
+
+  Future<void> _confirmDecision(
+    EmployerApplication application,
+    EmployerApplicationDecision decision,
+  ) async {
+    if (application.status != 'pending' ||
+        application.jobUnavailable ||
+        _updatingApplicationIds.contains(application.id)) {
+      return;
+    }
+
+    final decisionLabel = decision == EmployerApplicationDecision.accepted
+        ? 'Accept'
+        : 'Reject';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('$decisionLabel application?'),
+        content: Text(
+          '$decisionLabel the application from ${application.applicantId} for ${application.jobTitle}?',
+        ),
+        actions: [
+          TextButton(
+            key: ValueKey('cancel-decision-${application.id}'),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: ValueKey('confirm-decision-${application.id}'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(decisionLabel),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    await _saveDecision(application, decision);
+  }
+
+  Future<void> _saveDecision(
+    EmployerApplication application,
+    EmployerApplicationDecision decision,
+  ) async {
+    setState(() => _updatingApplicationIds.add(application.id));
+
+    Object? error;
+    try {
+      await _service.updateStatus(application.id, decision);
+    } catch (caught) {
+      error = caught;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _updatingApplicationIds.remove(application.id);
+          if (error == null) {
+            _applicationsFuture = _service.loadApplications();
+          }
+        });
+      }
+    }
+
+    if (!mounted) return;
+    final message = error == null
+        ? 'Application ${decision.name}.'
+        : _decisionErrorMessage(error);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: error == null ? null : const Color(0xFF9B2C2C),
+        ),
+      );
+  }
+
+  String _decisionErrorMessage(Object error) {
+    if (error is EmployerApplicationDecisionException) return error.message;
+    if (error is FirebaseException && error.code == 'permission-denied') {
+      return 'Firestore denied this decision. Confirm you own this job, are signed in as an employer, and that the application update rules are deployed.';
+    }
+    if (error is FirebaseException &&
+        (error.code == 'unavailable' ||
+            error.code == 'network-request-failed')) {
+      return 'Could not reach Firebase. Check your connection and try again.';
+    }
+    if (error is FirebaseException) {
+      return 'A Firebase error occurred while updating the application. Please try again.';
+    }
+    return 'Could not update the application. Please try again. ($error)';
+  }
 }
 
 class _EmployerApplicationCard extends StatelessWidget {
-  const _EmployerApplicationCard({required this.application});
+  const _EmployerApplicationCard({
+    required this.application,
+    required this.isUpdating,
+    required this.onDecision,
+  });
 
   final EmployerApplication application;
+  final bool isUpdating;
+  final ValueChanged<EmployerApplicationDecision> onDecision;
 
   @override
   Widget build(BuildContext context) {
@@ -275,6 +467,43 @@ class _EmployerApplicationCard extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (application.status == 'pending' &&
+                    !application.jobUnavailable) ...[
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      if (isUpdating) ...[
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(child: Text('Saving decision...')),
+                      ] else
+                        const Spacer(),
+                      OutlinedButton(
+                        key: ValueKey('reject-application-${application.id}'),
+                        onPressed: isUpdating
+                            ? null
+                            : () => onDecision(
+                                EmployerApplicationDecision.rejected,
+                              ),
+                        child: const Text('Reject'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        key: ValueKey('accept-application-${application.id}'),
+                        onPressed: isUpdating
+                            ? null
+                            : () => onDecision(
+                                EmployerApplicationDecision.accepted,
+                              ),
+                        child: const Text('Accept'),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

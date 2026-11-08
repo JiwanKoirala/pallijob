@@ -157,6 +157,20 @@ service cloud.firestore {
         && request.resource.data.status == 'pending'
         && request.resource.data.dateApplied == request.time
         && applicationId == request.resource.data.jobId + '_' + request.auth.uid;
+
+      // The owning Employer may make one final decision by changing status only.
+      allow update: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employer'
+        && resource.data.employerId == request.auth.uid
+        && resource.data.jobId is string
+        && exists(/databases/$(database)/documents/jobs/$(resource.data.jobId))
+        && get(/databases/$(database)/documents/jobs/$(resource.data.jobId)).data.employerId == request.auth.uid
+        && resource.data.status == 'pending'
+        && request.resource.data.status in ['accepted', 'rejected']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status'
+        ]);
     }
   }
 }

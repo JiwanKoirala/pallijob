@@ -57,19 +57,26 @@ try {
         studentId: 'student-a',
         employerId: 'employer-a',
         status: 'pending',
-        dateApplied: new Date(),
+        dateApplied: new Date('2026-11-01T00:00:00Z'),
       }),
       setDoc(doc(db, 'applications/job-a_student-b'), {
         jobId: 'job-a',
         studentId: 'student-b',
         employerId: 'employer-a',
         status: 'pending',
-        dateApplied: new Date(),
+        dateApplied: new Date('2026-11-02T00:00:00Z'),
       }),
       setDoc(doc(db, 'applications/job-b_student-b'), {
         jobId: 'job-b',
         studentId: 'student-b',
         employerId: 'employer-b',
+        status: 'pending',
+        dateApplied: new Date(),
+      }),
+      setDoc(doc(db, 'applications/job-b_student-a'), {
+        jobId: 'job-b',
+        studentId: 'student-a',
+        employerId: 'employer-a',
         status: 'pending',
         dateApplied: new Date(),
       }),
@@ -97,10 +104,10 @@ try {
       ),
     ),
   );
-  assert.equal(employerAApplications.size, 2);
+  assert.equal(employerAApplications.size, 3);
   assert.deepEqual(
     employerAApplications.docs.map((application) => application.id).sort(),
-    ['job-a_student-a', 'job-a_student-b'],
+    ['job-a_student-a', 'job-a_student-b', 'job-b_student-a'],
   );
 
   const employerBApplications = await assertSucceeds(
@@ -192,11 +199,109 @@ try {
     }),
   );
 
+  const employerAApplication = doc(employerA, 'applications/job-a_student-a');
+  const employerASecondApplication = doc(
+    employerA,
+    'applications/job-a_student-b',
+  );
+  const mismatchedOwnerApplication = doc(
+    employerA,
+    'applications/job-b_student-a',
+  );
+
+  await assertFails(
+    updateDoc(doc(employerB, 'applications/job-a_student-a'), {
+      status: 'accepted',
+    }),
+  );
+  await assertFails(
+    updateDoc(doc(studentA, 'applications/job-a_student-a'), {
+      status: 'accepted',
+    }),
+  );
+  await assertFails(
+    updateDoc(doc(signedOut, 'applications/job-a_student-a'), {
+      status: 'accepted',
+    }),
+  );
+  await assertFails(
+    updateDoc(mismatchedOwnerApplication, {
+      status: 'accepted',
+    }),
+  );
+
+  await assertFails(
+    updateDoc(employerASecondApplication, {
+      jobId: 'job-b',
+    }),
+  );
+  await assertFails(
+    updateDoc(employerASecondApplication, {
+      studentId: 'student-a',
+    }),
+  );
+  await assertFails(
+    updateDoc(employerASecondApplication, {
+      employerId: 'employer-b',
+    }),
+  );
+  await assertFails(
+    updateDoc(employerASecondApplication, {
+      dateApplied: new Date('2026-12-01T00:00:00Z'),
+    }),
+  );
+  await assertFails(
+    updateDoc(employerASecondApplication, {
+      status: 'withdrawn',
+    }),
+  );
+  await assertFails(
+    updateDoc(employerASecondApplication, {
+      status: 'pending',
+    }),
+  );
+
+  await assertSucceeds(
+    updateDoc(employerAApplication, {
+      status: 'accepted',
+    }),
+  );
+  await assertFails(
+    updateDoc(employerAApplication, {
+      status: 'rejected',
+    }),
+  );
+  await assertSucceeds(
+    updateDoc(employerASecondApplication, {
+      status: 'rejected',
+    }),
+  );
+
+  const finalizedApplication = await environment.withSecurityRulesDisabled(
+    async (context) => {
+      const snapshot = await getDoc(
+        doc(context.firestore(), 'applications/job-a_student-a'),
+      );
+      return snapshot.data();
+    },
+  );
+  assert.equal(finalizedApplication.status, 'accepted');
+  assert.equal(finalizedApplication.jobId, 'job-a');
+  assert.equal(finalizedApplication.studentId, 'student-a');
+  assert.equal(finalizedApplication.employerId, 'employer-a');
+  assert.equal(
+    finalizedApplication.dateApplied.toMillis(),
+    new Date('2026-11-01T00:00:00Z').getTime(),
+  );
+
   console.log('PASS Employer A can list only applications owned by Employer A');
   console.log('PASS Employer B cannot read Employer A applications');
   console.log('PASS unrelated students and signed-out users cannot list others’ applications');
   console.log('PASS students retain own-application reads');
   console.log('PASS create validates job-derived employerId and ownership is immutable');
+  console.log('PASS only the owning Employer can accept or reject a pending application');
+  console.log('PASS application ownership and date fields cannot change');
+  console.log('PASS final decisions and invalid status transitions are denied');
 } finally {
   await environment.cleanup();
 }

@@ -53,6 +53,193 @@ void main() {
     expect(find.textContaining('Nov'), findsOneWidget);
   });
 
+  testWidgets('accepts a pending application after confirmation', (
+    tester,
+  ) async {
+    final service = _FakeEmployerApplicationsService(
+      Future.value([employerApplication]),
+      onLoad: (call) => Future.value([
+        call == 1 ? employerApplication : _withStatus('accepted'),
+      ]),
+    );
+    await _pumpService(tester, service);
+
+    await tester.tap(find.byKey(const ValueKey('accept-application-job-1_student-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Accept application?'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('confirm-decision-job-1_student-1')));
+    await tester.pumpAndSettle();
+
+    expect(
+      service.decisions,
+      [
+        (
+          'job-1_student-1',
+          EmployerApplicationDecision.accepted,
+        ),
+      ],
+    );
+    expect(find.text('Accepted'), findsOneWidget);
+    expect(find.text('Accept'), findsNothing);
+    expect(find.text('Reject'), findsNothing);
+  });
+
+  testWidgets('rejects a pending application after confirmation', (
+    tester,
+  ) async {
+    final service = _FakeEmployerApplicationsService(
+      Future.value([employerApplication]),
+      onLoad: (call) => Future.value([
+        call == 1 ? employerApplication : _withStatus('rejected'),
+      ]),
+    );
+    await _pumpService(tester, service);
+
+    await tester.tap(
+      find.byKey(const ValueKey('reject-application-job-1_student-1')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Reject application?'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-decision-job-1_student-1')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      service.decisions,
+      [
+        (
+          'job-1_student-1',
+          EmployerApplicationDecision.rejected,
+        ),
+      ],
+    );
+    expect(find.text('Rejected'), findsOneWidget);
+    expect(find.text('Accept'), findsNothing);
+    expect(find.text('Reject'), findsNothing);
+  });
+
+  testWidgets('cancelling confirmation makes no decision', (tester) async {
+    final service = _FakeEmployerApplicationsService(
+      Future.value([employerApplication]),
+    );
+    await _pumpService(tester, service);
+
+    await tester.tap(
+      find.byKey(const ValueKey('reject-application-job-1_student-1')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('cancel-decision-job-1_student-1')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(service.decisions, isEmpty);
+    expect(find.text('Pending'), findsOneWidget);
+  });
+
+  testWidgets('offers decisions only for pending applications', (tester) async {
+    const acceptedApplication = EmployerApplication(
+      id: 'job-accepted_student-1',
+      jobId: 'job-accepted',
+      jobTitle: 'Accepted job',
+      applicantId: 'student-1',
+      status: 'accepted',
+      dateApplied: null,
+      jobUnavailable: false,
+    );
+    const rejectedApplication = EmployerApplication(
+      id: 'job-rejected_student-1',
+      jobId: 'job-rejected',
+      jobTitle: 'Rejected job',
+      applicantId: 'student-1',
+      status: 'rejected',
+      dateApplied: null,
+      jobUnavailable: false,
+    );
+    await _pumpApplications(tester, [
+      acceptedApplication,
+      rejectedApplication,
+    ]);
+
+    expect(find.text('Accepted'), findsOneWidget);
+    expect(find.text('Rejected'), findsOneWidget);
+    expect(find.byType(OutlinedButton), findsNothing);
+    expect(find.byType(FilledButton), findsNothing);
+  });
+
+  testWidgets('shows loading feedback and prevents duplicate decisions', (
+    tester,
+  ) async {
+    final saving = Completer<void>();
+    final service = _FakeEmployerApplicationsService(
+      Future.value([employerApplication]),
+      onUpdate: (_, _) => saving.future,
+    );
+    await _pumpService(tester, service);
+
+    await tester.tap(
+      find.byKey(const ValueKey('accept-application-job-1_student-1')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-decision-job-1_student-1')),
+    );
+    await tester.pump();
+
+    expect(find.text('Saving decision...'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(service.decisions, hasLength(1));
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('accept-application-job-1_student-1')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find.byKey(const ValueKey('reject-application-job-1_student-1')),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    saving.complete();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('explains permission-denied decision errors', (tester) async {
+    final service = _FakeEmployerApplicationsService(
+      Future.value([employerApplication]),
+      onUpdate: (_, _) async {
+        throw FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'permission-denied',
+        );
+      },
+    );
+    await _pumpService(tester, service);
+
+    await _chooseAndConfirm(tester, 'accept');
+
+    expect(find.textContaining('Firestore denied this decision'), findsOneWidget);
+  });
+
+  testWidgets('reports other decision errors', (tester) async {
+    final service = _FakeEmployerApplicationsService(
+      Future.value([employerApplication]),
+      onUpdate: (_, _) async => throw StateError('write failed'),
+    );
+    await _pumpService(tester, service);
+
+    await _chooseAndConfirm(tester, 'reject');
+
+    expect(find.textContaining('Could not update the application'), findsOneWidget);
+  });
+
   testWidgets('shows a missing-job notice without hiding application history', (
     tester,
   ) async {
@@ -158,18 +345,48 @@ Future<void> _pumpApplications(
   WidgetTester tester,
   List<EmployerApplication> applications,
 ) async {
-  final result = Completer<List<EmployerApplication>>();
+  await _pumpService(
+    tester,
+    _FakeEmployerApplicationsService(Future.value(applications)),
+  );
+}
+
+Future<void> _pumpService(
+  WidgetTester tester,
+  _FakeEmployerApplicationsService service,
+) async {
   await tester.pumpWidget(
     MaterialApp(
       home: EmployerApplicationsScreen(
-        applicationsService: _FakeEmployerApplicationsService(result.future),
+        applicationsService: service,
       ),
     ),
   );
-  await tester.pump();
-  result.complete(applications);
   await tester.pumpAndSettle();
 }
+
+Future<void> _chooseAndConfirm(WidgetTester tester, String decision) async {
+  await tester.tap(
+    find.byKey(
+      ValueKey('$decision-application-job-1_student-1'),
+    ),
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(
+    find.byKey(const ValueKey('confirm-decision-job-1_student-1')),
+  );
+  await tester.pumpAndSettle();
+}
+
+EmployerApplication _withStatus(String status) => EmployerApplication(
+  id: employerApplication.id,
+  jobId: employerApplication.jobId,
+  jobTitle: employerApplication.jobTitle,
+  applicantId: employerApplication.applicantId,
+  status: status,
+  dateApplied: employerApplication.dateApplied,
+  jobUnavailable: employerApplication.jobUnavailable,
+);
 
 Future<void> _pumpError(WidgetTester tester, Object error) async {
   final result = Completer<List<EmployerApplication>>();
@@ -186,15 +403,34 @@ Future<void> _pumpError(WidgetTester tester, Object error) async {
 }
 
 class _FakeEmployerApplicationsService implements EmployerApplicationsService {
-  _FakeEmployerApplicationsService(this.result, {this.onLoad});
+  _FakeEmployerApplicationsService(
+    this.result, {
+    this.onLoad,
+    this.onUpdate,
+  });
 
   final Future<List<EmployerApplication>> result;
   final Future<List<EmployerApplication>> Function(int call)? onLoad;
+  final Future<void> Function(
+    String applicationId,
+    EmployerApplicationDecision decision,
+  )?
+  onUpdate;
+  final List<(String, EmployerApplicationDecision)> decisions = [];
   int loadCalls = 0;
 
   @override
   Future<List<EmployerApplication>> loadApplications() {
     loadCalls++;
     return onLoad?.call(loadCalls) ?? result;
+  }
+
+  @override
+  Future<void> updateStatus(
+    String applicationId,
+    EmployerApplicationDecision decision,
+  ) async {
+    decisions.add((applicationId, decision));
+    await onUpdate?.call(applicationId, decision);
   }
 }

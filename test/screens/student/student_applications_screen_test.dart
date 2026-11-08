@@ -55,6 +55,38 @@ void main() {
     expect(find.textContaining('Nov'), findsOneWidget);
   });
 
+  testWidgets('refreshes and displays a finalized application status', (
+    tester,
+  ) async {
+    final acceptedApplication = StudentApplication(
+      id: pendingApplication.id,
+      jobId: pendingApplication.jobId,
+      jobTitle: pendingApplication.jobTitle,
+      location: pendingApplication.location,
+      status: 'accepted',
+      dateApplied: pendingApplication.dateApplied,
+    );
+    final service = _FakeStudentApplicationsService(
+      Future.value([pendingApplication]),
+      onLoad: (call) =>
+          Future.value([call == 1 ? pendingApplication : acceptedApplication]),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StudentApplicationsScreen(applicationsService: service),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pending'), findsOneWidget);
+    await tester.tap(find.byTooltip('Refresh applications'));
+    await tester.pumpAndSettle();
+
+    expect(service.loadCalls, 2);
+    expect(find.text('Accepted'), findsOneWidget);
+    expect(find.text('Pending'), findsNothing);
+  });
+
   testWidgets('shows a graceful unavailable listing for a deleted job', (
     tester,
   ) async {

@@ -153,6 +153,13 @@ class _StudentApplicationsScreenState extends State<StudentApplicationsScreen> {
         ),
         backgroundColor: const Color(0xFFF8FBF8),
         surfaceTintColor: Colors.transparent,
+        actions: [
+          IconButton(
+            tooltip: 'Refresh applications',
+            onPressed: _refreshApplications,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
       ),
       body: FutureBuilder<List<StudentApplication>>(
         future: _applicationsFuture,
@@ -212,6 +219,12 @@ class _StudentApplicationsScreenState extends State<StudentApplicationsScreen> {
         },
       ),
     );
+  }
+
+  void _refreshApplications() {
+    setState(() {
+      _applicationsFuture = widget.applicationsService.loadApplications();
+    });
   }
 }
 
