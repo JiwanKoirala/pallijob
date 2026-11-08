@@ -73,9 +73,9 @@ try {
         status: 'pending',
         dateApplied: new Date(),
       }),
-      setDoc(doc(db, 'applications/job-b_student-a'), {
+      setDoc(doc(db, 'applications/job-b_student-mismatch'), {
         jobId: 'job-b',
-        studentId: 'student-a',
+        studentId: 'student-b',
         employerId: 'employer-a',
         status: 'pending',
         dateApplied: new Date(),
@@ -107,7 +107,11 @@ try {
   assert.equal(employerAApplications.size, 3);
   assert.deepEqual(
     employerAApplications.docs.map((application) => application.id).sort(),
-    ['job-a_student-a', 'job-a_student-b', 'job-b_student-a'],
+    [
+      'job-a_student-a',
+      'job-a_student-b',
+      'job-b_student-mismatch',
+    ],
   );
 
   const employerBApplications = await assertSucceeds(
@@ -206,7 +210,7 @@ try {
   );
   const mismatchedOwnerApplication = doc(
     employerA,
-    'applications/job-b_student-a',
+    'applications/job-b_student-mismatch',
   );
 
   await assertFails(
@@ -277,14 +281,13 @@ try {
     }),
   );
 
-  const finalizedApplication = await environment.withSecurityRulesDisabled(
-    async (context) => {
-      const snapshot = await getDoc(
-        doc(context.firestore(), 'applications/job-a_student-a'),
-      );
-      return snapshot.data();
-    },
-  );
+  let finalizedApplication;
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const snapshot = await getDoc(
+      doc(context.firestore(), 'applications/job-a_student-a'),
+    );
+    finalizedApplication = snapshot.data();
+  });
   assert.equal(finalizedApplication.status, 'accepted');
   assert.equal(finalizedApplication.jobId, 'job-a');
   assert.equal(finalizedApplication.studentId, 'student-a');
