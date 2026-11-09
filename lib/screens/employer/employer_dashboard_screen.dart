@@ -4,6 +4,7 @@ import 'package:pallijob/screens/auth/welcome_screen.dart';
 import 'package:pallijob/screens/employer/employer_applications_screen.dart';
 import 'package:pallijob/screens/employer/manage_jobs_screen.dart';
 import 'package:pallijob/screens/employer/post_job_screen.dart';
+import 'package:pallijob/screens/employer/employer_profile_screen.dart';
 
 class EmployerDashboardScreen extends StatelessWidget {
   const EmployerDashboardScreen({super.key, this.applicationsService});
@@ -120,6 +121,11 @@ class EmployerDashboardScreen extends StatelessWidget {
                                   ),
                                 ),
                               ),
+                            'My Profile' => () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const EmployerProfileScreen(),
+                              ),
+                            ),
                             _ => null,
                           },
                         ),
