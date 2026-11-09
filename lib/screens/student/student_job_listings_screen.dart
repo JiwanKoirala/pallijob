@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:pallijob/screens/student/job_application_service.dart';
+import 'package:pallijob/screens/student/student_visa_eligibility_screen.dart';
 
 class StudentJobListingsScreen extends StatefulWidget {
   const StudentJobListingsScreen({
@@ -350,10 +351,12 @@ class StudentJobDetailsScreen extends StatefulWidget {
     super.key,
     required this.job,
     this.applicationService = const FirestoreJobApplicationService(),
+    this.visaGuidanceService = const FirestoreStudentVisaGuidanceService(),
   });
 
   final StudentJobListing job;
   final JobApplicationService applicationService;
+  final StudentVisaGuidanceService visaGuidanceService;
 
   @override
   State<StudentJobDetailsScreen> createState() =>
@@ -454,6 +457,28 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
                         content: _formatDate(widget.job.createdAt),
                       ),
                       const SizedBox(height: 24),
+                      OutlinedButton.icon(
+                        key: const ValueKey('check-visa-eligibility'),
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => StudentVisaEligibilityScreen(
+                              jobId: widget.job.id,
+                              guidanceService: widget.visaGuidanceService,
+                            ),
+                          ),
+                        ),
+                        icon: const Icon(Icons.info_outline_rounded),
+                        label: const Text('Check Visa Eligibility'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF247545),
+                          side: const BorderSide(color: Color(0xFF247545)),
+                          minimumSize: const Size.fromHeight(50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
                       _applyButton(),
                     ],
                   ),
