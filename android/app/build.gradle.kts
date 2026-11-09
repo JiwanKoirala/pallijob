@@ -39,6 +39,11 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+}
+
+dependencies {
+    implementation("com.google.mlkit:translate:17.0.3")
 }
 
 kotlin {

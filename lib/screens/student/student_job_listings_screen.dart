@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:pallijob/screens/student/job_application_service.dart';
+import 'package:pallijob/screens/student/job_translation_service.dart';
 import 'package:pallijob/screens/student/student_visa_eligibility_screen.dart';
 
 class StudentJobListingsScreen extends StatefulWidget {
@@ -352,11 +353,13 @@ class StudentJobDetailsScreen extends StatefulWidget {
     required this.job,
     this.applicationService = const FirestoreJobApplicationService(),
     this.visaGuidanceService = const FirestoreStudentVisaGuidanceService(),
+    this.translationService = const PlatformJobTranslationService(),
   });
 
   final StudentJobListing job;
   final JobApplicationService applicationService;
   final StudentVisaGuidanceService visaGuidanceService;
+  final JobTranslationService translationService;
 
   @override
   State<StudentJobDetailsScreen> createState() =>
@@ -366,6 +369,13 @@ class StudentJobDetailsScreen extends StatefulWidget {
 class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
   late Future<JobApplicationStatus> _applicationStatus;
   bool _isSubmitting = false;
+  bool _showEnglish = false;
+  bool _isTranslating = false;
+  bool _translationRequested = false;
+  TranslatedJobContent? _translatedContent;
+  Object? _translationError;
+  JobTranslationProgress _translationProgress =
+      JobTranslationProgress.checkingModels;
 
   @override
   void initState() {
@@ -409,7 +419,10 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        widget.job.title,
+                        _displayContent(
+                          JobInformationField.title,
+                          widget.job.title,
+                        ),
                         style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(
                               color: const Color(0xFF173B27),
@@ -437,14 +450,46 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
                         ],
                       ),
                       const SizedBox(height: 24),
+                      SegmentedButton<bool>(
+                        key: const ValueKey('job-language-toggle'),
+                        segments: const [
+                          ButtonSegment<bool>(
+                            value: false,
+                            label: Text('Original'),
+                            icon: Icon(Icons.article_outlined),
+                          ),
+                          ButtonSegment<bool>(
+                            value: true,
+                            label: Text('English'),
+                            icon: Icon(Icons.translate_rounded),
+                          ),
+                        ],
+                        selected: {_showEnglish},
+                        onSelectionChanged: (selection) {
+                          final showEnglish = selection.first;
+                          setState(() => _showEnglish = showEnglish);
+                          if (showEnglish) _requestTranslation();
+                        },
+                      ),
+                      if (_showEnglish) ...[
+                        const SizedBox(height: 12),
+                        _translationStatus(),
+                      ],
+                      const SizedBox(height: 18),
                       _JobDetailSection(
                         title: 'Description',
-                        content: widget.job.description,
+                        content: _displayContent(
+                          JobInformationField.description,
+                          widget.job.description,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       _JobDetailSection(
                         title: 'Requirements',
-                        content: widget.job.requirements,
+                        content: _displayContent(
+                          JobInformationField.requirements,
+                          widget.job.requirements,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       _JobDetailSection(
@@ -489,6 +534,158 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _requestTranslation({bool retry = false}) async {
+    if (_isTranslating || (_translationRequested && !retry)) return;
+
+    final content = <JobInformationField, String>{};
+    for (final entry in {
+      JobInformationField.title: widget.job.title,
+      JobInformationField.description: widget.job.description,
+      JobInformationField.requirements: widget.job.requirements,
+    }.entries) {
+      final value = entry.value.trim();
+      if (value.isNotEmpty &&
+          value != 'Not provided' &&
+          value != 'Untitled job') {
+        content[entry.key] = value;
+      }
+    }
+
+    setState(() {
+      _translationRequested = true;
+      _isTranslating = true;
+      _translationProgress = JobTranslationProgress.checkingModels;
+      _translationError = content.isEmpty
+          ? const JobTranslationContentMissingException()
+          : null;
+      _translatedContent = null;
+    });
+    if (content.isEmpty) {
+      setState(() => _isTranslating = false);
+      return;
+    }
+
+    try {
+      final result = await widget.translationService.translate(
+        JobTranslationRequest(originalContent: Map.unmodifiable(content)),
+        onProgress: (progress) {
+          if (!mounted) return;
+          setState(() => _translationProgress = progress);
+        },
+      );
+      for (final entry in content.entries) {
+        final translated = result.content[entry.key]?.trim();
+        if (translated == null ||
+            translated.isEmpty ||
+            (translated == entry.value && _containsKorean(entry.value))) {
+          throw const JobTranslationIncompleteException();
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _translatedContent = result;
+        _isTranslating = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _translationError = error;
+        _isTranslating = false;
+      });
+    }
+  }
+
+  String _displayContent(JobInformationField field, String original) {
+    if (!_showEnglish || _isTranslating || _translationError != null) {
+      return original;
+    }
+    return _translatedContent?.content[field]?.trim() ?? original;
+  }
+
+  Widget _translationStatus() {
+    if (_isTranslating) {
+      final message = switch (_translationProgress) {
+        JobTranslationProgress.checkingModels =>
+          'Checking for downloaded Korean and English models...',
+        JobTranslationProgress.downloadingModels => 'Preparing language models. Internet may be required the first time; models use device storage.',
+        JobTranslationProgress.translating => 'Translating on your device...',
+      };
+      return Row(
+        children: [
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Color(0xFF247545),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message)),
+        ],
+      );
+    }
+
+    final error = _translationError;
+    if (error is JobTranslationUnavailableException) {
+      return _TranslationMessage(
+        message: 'English translation is unavailable until a translation provider is selected and securely integrated. Original job information is shown below.',
+      );
+    }
+    if (error is JobTranslationUnsupportedPlatformException) {
+      return const _TranslationMessage(
+        message: 'Translation unavailable on this device. Apple Translation requires a supported iOS version and device; Android uses on-device translation. Original information is shown below.',
+      );
+    }
+    if (error is JobTranslationModelDownloadException) {
+      return _TranslationMessage(
+        message: 'Could not prepare the Korean and English translation resources. Check your internet connection and allow language downloads, then try again. First setup may need internet and uses device storage; downloaded resources are reused later.',
+        action: TextButton(
+          onPressed: () => _requestTranslation(retry: true),
+          child: const Text('Try again'),
+        ),
+      );
+    }
+    if (error is JobTranslationContentMissingException) {
+      return const _TranslationMessage(
+        message: 'There is no job title, description, or requirements content available to translate. Original information is shown below.',
+      );
+    }
+    if (error != null) {
+      return _TranslationMessage(
+        message: 'We could not translate all job information. Original information is shown below.',
+        action: TextButton(
+          onPressed: () => _requestTranslation(retry: true),
+          child: const Text('Try again'),
+        ),
+      );
+    }
+    if (_translatedContent != null) {
+      return const _TranslationMessage(
+        message: 'English translation. The original listing is unchanged. Language resources are stored on this device and may be reused offline.',
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  @override
+  void didUpdateWidget(covariant StudentJobDetailsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.job.id != widget.job.id) {
+      _showEnglish = false;
+      _isTranslating = false;
+      _translationRequested = false;
+      _translatedContent = null;
+      _translationError = null;
+      _translationProgress = JobTranslationProgress.checkingModels;
+      _applicationStatus = widget.applicationService.getStatus(widget.job.id);
+    }
+  }
+
+  static bool _containsKorean(String value) {
+    return RegExp(r'[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]').hasMatch(value);
   }
 
   Widget _applyButton() {
@@ -770,6 +967,36 @@ class _JobDetailSection extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _TranslationMessage extends StatelessWidget {
+  const _TranslationMessage({required this.message, this.action});
+
+  final String message;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEDF4EF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFDCE8DF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            message,
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: const Color(0xFF173B27), height: 1.4),
+          ),
+          if (action != null) ...[const SizedBox(height: 4), action!],
+        ],
       ),
     );
   }
