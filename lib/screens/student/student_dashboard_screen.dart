@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:pallijob/screens/auth/welcome_screen.dart';
 import 'package:pallijob/screens/student/student_applications_screen.dart';
 import 'package:pallijob/screens/student/student_job_listings_screen.dart';
+import 'package:pallijob/screens/student/student_profile_screen.dart';
 
 class StudentDashboardScreen extends StatelessWidget {
   const StudentDashboardScreen({super.key});
@@ -105,6 +106,13 @@ class StudentDashboardScreen extends StatelessWidget {
                                   MaterialPageRoute<void>(
                                     builder: (_) =>
                                         const StudentApplicationsScreen(),
+                                  ),
+                                )
+                              : module.title == 'My Profile'
+                              ? () => Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) =>
+                                        const StudentProfileScreen(),
                                   ),
                                 )
                               : null,
