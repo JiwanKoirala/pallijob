@@ -1,8 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:pallijob/screens/student/job_translation_service.dart';
+
+import 'chat_translation_service.dart';
 
 const int maxChatMessageLength = 2000;
+
+typedef _ChatTranslationKey = ({String messageId, String content});
 
 enum ChatParticipantRole { student, employer }
 
@@ -222,11 +227,13 @@ class ApplicationChatScreen extends StatefulWidget {
   const ApplicationChatScreen({
     required this.applicationId,
     this.chatService = const FirestoreApplicationChatService(),
+    this.translationService = const PlatformChatTranslationService(),
     super.key,
   });
 
   final String applicationId;
   final ApplicationChatService chatService;
+  final ChatTranslationService translationService;
 
   @override
   State<ApplicationChatScreen> createState() => _ApplicationChatScreenState();
@@ -240,6 +247,10 @@ class _ApplicationChatScreenState extends State<ApplicationChatScreen> {
   bool _isSending = false;
   String? _sendError;
   String? _validationError;
+  final Map<_ChatTranslationKey, String> _translations = {};
+  final Map<_ChatTranslationKey, Object> _translationErrors = {};
+  final Set<_ChatTranslationKey> _visibleTranslations = {};
+  _ChatTranslationKey? _activeTranslationKey;
 
   @override
   void initState() {
@@ -336,13 +347,64 @@ class _ApplicationChatScreenState extends State<ApplicationChatScreen> {
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
           itemCount: messages.length,
           separatorBuilder: (_, _) => const SizedBox(height: 12),
-          itemBuilder: (context, index) => _MessageBubble(
-            message: messages[index],
-            conversation: conversation,
-          ),
+          itemBuilder: (context, index) {
+            final message = messages[index];
+            final translationKey = (
+              messageId: message.id,
+              content: message.content,
+            );
+            return _MessageBubble(
+              message: message,
+              conversation: conversation,
+              translation: _translations[translationKey],
+              translationError: _translationErrors[translationKey],
+              isTranslationVisible: _visibleTranslations.contains(
+                translationKey,
+              ),
+              isTranslating: _activeTranslationKey == translationKey,
+              isTranslationDisabled:
+                  _activeTranslationKey != null &&
+                  _activeTranslationKey != translationKey,
+              onTranslationPressed: () => _toggleTranslation(message),
+            );
+          },
         );
       },
     );
+  }
+
+  Future<void> _toggleTranslation(ChatMessage message) async {
+    final key = (messageId: message.id, content: message.content);
+    if (_activeTranslationKey != null) return;
+
+    if (_translations.containsKey(key)) {
+      setState(() {
+        if (!_visibleTranslations.remove(key)) {
+          _visibleTranslations.add(key);
+        }
+      });
+      return;
+    }
+
+    setState(() {
+      _activeTranslationKey = key;
+      _translationErrors.remove(key);
+    });
+    try {
+      final translation = await widget.translationService.translate(
+        message.content,
+      );
+      if (mounted) {
+        setState(() {
+          _translations[key] = translation;
+          _visibleTranslations.add(key);
+        });
+      }
+    } catch (error) {
+      if (mounted) setState(() => _translationErrors[key] = error);
+    } finally {
+      if (mounted) setState(() => _activeTranslationKey = null);
+    }
   }
 
   Widget _messageComposer() {
@@ -454,10 +516,25 @@ class _ApplicationChatScreenState extends State<ApplicationChatScreen> {
 }
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.message, required this.conversation});
+  const _MessageBubble({
+    required this.message,
+    required this.conversation,
+    required this.translation,
+    required this.translationError,
+    required this.isTranslationVisible,
+    required this.isTranslating,
+    required this.isTranslationDisabled,
+    required this.onTranslationPressed,
+  });
 
   final ChatMessage message;
   final ChatConversation conversation;
+  final String? translation;
+  final Object? translationError;
+  final bool isTranslationVisible;
+  final bool isTranslating;
+  final bool isTranslationDisabled;
+  final VoidCallback onTranslationPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -499,12 +576,80 @@ class _MessageBubble extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(message.content),
+                if (translation != null && isTranslationVisible) ...[
+                  const SizedBox(height: 10),
+                  const Divider(height: 1, color: Color(0xFFDCE8DF)),
+                  const SizedBox(height: 8),
+                  Text(
+                    'English translation',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: const Color(0xFF247545),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    translation!,
+                    key: ValueKey('translation-${message.id}'),
+                  ),
+                ],
                 const SizedBox(height: 5),
                 Text(
                   timeLabel,
                   style: Theme.of(context).textTheme.labelSmall
                       ?.copyWith(color: const Color(0xFF647369)),
                 ),
+                if (isTranslating) ...[
+                  const SizedBox(height: 8),
+                  const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      SizedBox(width: 8),
+                      Flexible(child: Text('Translating on your device…')),
+                    ],
+                  ),
+                ] else ...[
+                  TextButton.icon(
+                    key: ValueKey('translate-message-${message.id}'),
+                    onPressed: isTranslationDisabled
+                        ? null
+                        : onTranslationPressed,
+                    icon: Icon(
+                      translation == null
+                          ? Icons.translate_rounded
+                          : isTranslationVisible
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      size: 18,
+                    ),
+                    label: Text(
+                      translationError != null
+                          ? 'Try again'
+                          : translation == null
+                          ? 'Translate to English'
+                          : isTranslationVisible
+                          ? 'Hide translation'
+                          : 'Show translation',
+                    ),
+                  ),
+                  if (translationError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        _chatTranslationErrorMessage(translationError!),
+                        key: ValueKey('translation-error-${message.id}'),
+                        style: const TextStyle(
+                          color: Color(0xFF9B2C2C),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                ],
               ],
             ),
           ),
@@ -560,6 +705,19 @@ class _ChatState extends StatelessWidget {
       ),
     );
   }
+}
+
+String _chatTranslationErrorMessage(Object error) {
+  if (error is JobTranslationUnsupportedPlatformException) {
+    return 'On-device Korean-to-English translation is not supported on this device. The original message is unchanged.';
+  }
+  if (error is JobTranslationUnavailableException) {
+    return 'Translation is unavailable on this device. The original message is unchanged.';
+  }
+  if (error is JobTranslationModelDownloadException) {
+    return 'Could not prepare the language resources. Check your connection and try again.';
+  }
+  return 'Could not translate this message. The original message is unchanged. Please try again.';
 }
 
 String _accessErrorMessage(Object? error) {
