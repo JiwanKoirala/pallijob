@@ -6,6 +6,7 @@ import 'package:pallijob/screens/notifications/in_app_notifications_screen.dart'
 import 'package:pallijob/screens/student/student_applications_screen.dart';
 import 'package:pallijob/screens/student/student_job_listings_screen.dart';
 import 'package:pallijob/screens/student/student_profile_screen.dart';
+import 'package:pallijob/screens/student/student_work_information_screen.dart';
 
 class StudentDashboardScreen extends StatelessWidget {
   const StudentDashboardScreen({super.key, this.notificationsService});
@@ -27,6 +28,11 @@ class StudentDashboardScreen extends StatelessWidget {
       title: 'Notifications',
       description: 'Application decisions and new messages',
       icon: Icons.notifications_none_rounded,
+    ),
+    _DashboardModule(
+      title: 'Work Information & FAQ',
+      description: 'Work guidance and how to use PalliJob',
+      icon: Icons.info_outline_rounded,
     ),
     _DashboardModule(
       title: 'Messages',
@@ -133,6 +139,13 @@ class StudentDashboardScreen extends StatelessWidget {
                                   MaterialPageRoute<void>(
                                     builder: (_) =>
                                         const StudentProfileScreen(),
+                                  ),
+                                )
+                              : module.title == 'Work Information & FAQ'
+                              ? () => Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) =>
+                                        const StudentWorkInformationScreen(),
                                   ),
                                 )
                               : null,
