@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pallijob/screens/student/student_applications_screen.dart';
 import 'package:pallijob/screens/student/student_dashboard_screen.dart';
 
+import '../../support/fake_application_chat_service.dart';
+
 final pendingApplication = StudentApplication(
   id: 'job-1_student-1',
   jobId: 'job-1',
@@ -53,6 +55,40 @@ void main() {
     expect(find.text('Seoul'), findsOneWidget);
     expect(find.text('Pending'), findsOneWidget);
     expect(find.textContaining('Nov'), findsOneWidget);
+    expect(find.text('Chat'), findsNothing);
+  });
+
+  testWidgets('shows an authorized Chat entry and opens its application chat', (
+    tester,
+  ) async {
+    final application = StudentApplication(
+      id: pendingApplication.id,
+      jobId: pendingApplication.jobId,
+      jobTitle: pendingApplication.jobTitle,
+      location: pendingApplication.location,
+      status: pendingApplication.status,
+      dateApplied: pendingApplication.dateApplied,
+      canChat: true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StudentApplicationsScreen(
+          applicationsService: _FakeStudentApplicationsService(
+            Future.value([application]),
+          ),
+          chatService: FakeApplicationChatService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('chat-application-job-1_student-1')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No messages yet'), findsOneWidget);
+    expect(find.text('Write a message'), findsOneWidget);
   });
 
   testWidgets('refreshes and displays a finalized application status', (

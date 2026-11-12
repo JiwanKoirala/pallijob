@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:pallijob/screens/chat/application_chat_screen.dart';
 
 class StudentApplication {
   const StudentApplication({
@@ -10,6 +11,7 @@ class StudentApplication {
     required this.location,
     required this.status,
     required this.dateApplied,
+    this.canChat = false,
   });
 
   final String id;
@@ -18,6 +20,7 @@ class StudentApplication {
   final String location;
   final String status;
   final DateTime? dateApplied;
+  final bool canChat;
 }
 
 abstract interface class StudentApplicationsService {
@@ -64,6 +67,7 @@ class FirestoreStudentApplicationsService
             : await firestore.collection('jobs').doc(jobId).get();
         final jobData = job?.data();
         final isMissingJob = job == null || !job.exists;
+        final employerId = jobData?['employerId'];
         final dateValue = data['dateApplied'];
 
         return StudentApplication(
@@ -81,6 +85,14 @@ class FirestoreStudentApplicationsService
               : _textField(jobData, 'location', fallback: 'Not provided'),
           status: _stringValue(data['status'], fallback: 'Unknown'),
           dateApplied: dateValue is Timestamp ? dateValue.toDate() : null,
+          canChat:
+              !isMissingJob &&
+              data['studentId'] == user.uid &&
+              employerId is String &&
+              employerId.trim().isNotEmpty &&
+              employerId != user.uid &&
+              (!data.containsKey('employerId') ||
+                  data['employerId'] == employerId),
         );
       }),
     );
@@ -120,9 +132,11 @@ class StudentApplicationsScreen extends StatefulWidget {
   const StudentApplicationsScreen({
     super.key,
     this.applicationsService = const FirestoreStudentApplicationsService(),
+    this.chatService,
   });
 
   final StudentApplicationsService applicationsService;
+  final ApplicationChatService? chatService;
 
   @override
   State<StudentApplicationsScreen> createState() =>
@@ -211,8 +225,22 @@ class _StudentApplicationsScreenState extends State<StudentApplicationsScreen> {
                 ),
                 itemCount: applications.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemBuilder: (context, index) =>
-                    _ApplicationCard(application: applications[index]),
+                itemBuilder: (context, index) {
+                  final application = applications[index];
+                  return _ApplicationCard(
+                    application: application,
+                    onChat: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ApplicationChatScreen(
+                          applicationId: application.id,
+                          chatService:
+                              widget.chatService ??
+                              const FirestoreApplicationChatService(),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               );
             },
           );
@@ -229,9 +257,10 @@ class _StudentApplicationsScreenState extends State<StudentApplicationsScreen> {
 }
 
 class _ApplicationCard extends StatelessWidget {
-  const _ApplicationCard({required this.application});
+  const _ApplicationCard({required this.application, required this.onChat});
 
   final StudentApplication application;
+  final VoidCallback onChat;
 
   @override
   Widget build(BuildContext context) {
@@ -297,6 +326,15 @@ class _ApplicationCard extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: const Color(0xFF647369)),
             ),
+            if (application.canChat) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                key: ValueKey('chat-application-${application.id}'),
+                onPressed: onChat,
+                icon: const Icon(Icons.chat_bubble_outline_rounded),
+                label: const Text('Chat'),
+              ),
+            ],
           ],
         ),
       ),

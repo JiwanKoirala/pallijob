@@ -101,11 +101,32 @@ service cloud.firestore {
     }
 
     match /applications/{applicationId} {
-      function isEmployerForApplication() {
+      function isEmployerByApplicationField() {
         return request.auth != null
           && exists(/databases/$(database)/documents/users/$(request.auth.uid))
           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employer'
           && resource.data.employerId == request.auth.uid;
+      }
+
+      function isEmployerForApplication() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employer'
+          && resource.data.jobId is string
+          && exists(/databases/$(database)/documents/jobs/$(resource.data.jobId))
+          && get(/databases/$(database)/documents/jobs/$(resource.data.jobId)).data.employerId == request.auth.uid
+          && (!('employerId' in resource.data)
+            || resource.data.employerId ==
+              get(/databases/$(database)/documents/jobs/$(resource.data.jobId)).data.employerId);
+      }
+
+      function isEmployerForApplicationJob() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employer'
+          && resource.data.jobId is string
+          && exists(/databases/$(database)/documents/jobs/$(resource.data.jobId))
+          && get(/databases/$(database)/documents/jobs/$(resource.data.jobId)).data.employerId == request.auth.uid;
       }
 
       // Students can read only their own documents; employers only their jobs' applications.
@@ -114,7 +135,8 @@ service cloud.firestore {
           (resource == null
             && applicationId.matches('.*_' + request.auth.uid + '$'))
           || (resource != null
-            && resource.data.studentId == request.auth.uid)
+          && resource.data.studentId == request.auth.uid)
+          || isEmployerByApplicationField()
           || isEmployerForApplication()
         );
 
@@ -126,7 +148,8 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
             && resource.data.studentId == request.auth.uid
           )
-          || isEmployerForApplication()
+          || isEmployerByApplicationField()
+          || isEmployerForApplicationJob()
         );
 
       // Each student can create only one pending application per existing job.
@@ -162,15 +185,87 @@ service cloud.firestore {
       allow update: if request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employer'
-        && resource.data.employerId == request.auth.uid
+        && isEmployerForApplication()
         && resource.data.jobId is string
-        && exists(/databases/$(database)/documents/jobs/$(resource.data.jobId))
-        && get(/databases/$(database)/documents/jobs/$(resource.data.jobId)).data.employerId == request.auth.uid
         && resource.data.status == 'pending'
         && request.resource.data.status in ['accepted', 'rejected']
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'status'
         ]);
+    }
+
+    match /applications/{applicationId}/messages/{messageId} {
+      function validChatParents() {
+        return exists(/databases/$(database)/documents/applications/$(applicationId))
+          && get(/databases/$(database)/documents/applications/$(applicationId)).data.jobId is string
+          && get(/databases/$(database)/documents/applications/$(applicationId)).data.jobId.size() > 0
+          && get(/databases/$(database)/documents/applications/$(applicationId)).data.studentId is string
+          && get(/databases/$(database)/documents/applications/$(applicationId)).data.studentId.size() > 0
+          && exists(/databases/$(database)/documents/jobs/$(get(/databases/$(database)/documents/applications/$(applicationId)).data.jobId))
+          && get(/databases/$(database)/documents/jobs/$(get(/databases/$(database)/documents/applications/$(applicationId)).data.jobId)).data.employerId is string
+          && get(/databases/$(database)/documents/jobs/$(get(/databases/$(database)/documents/applications/$(applicationId)).data.jobId)).data.employerId.size() > 0
+          && get(/databases/$(database)/documents/applications/$(applicationId)).data.studentId !=
+            get(/databases/$(database)/documents/jobs/$(get(/databases/$(database)/documents/applications/$(applicationId)).data.jobId)).data.employerId
+          && (!('employerId' in get(/databases/$(database)/documents/applications/$(applicationId)).data)
+            || get(/databases/$(database)/documents/applications/$(applicationId)).data.employerId ==
+              get(/databases/$(database)/documents/jobs/$(get(/databases/$(database)/documents/applications/$(applicationId)).data.jobId)).data.employerId);
+      }
+
+      function isChatParticipant() {
+        return request.auth != null
+          && validChatParents()
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && (
+            (
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
+              && get(/databases/$(database)/documents/applications/$(applicationId)).data.studentId == request.auth.uid
+            )
+            || (
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employer'
+              && get(/databases/$(database)/documents/jobs/$(get(/databases/$(database)/documents/applications/$(applicationId)).data.jobId)).data.employerId == request.auth.uid
+            )
+          );
+      }
+
+      allow get, list: if isChatParticipant();
+
+      allow create: if isChatParticipant()
+        && request.resource.data.keys().hasAll([
+          'senderId',
+          'receiverId',
+          'content',
+          'timestamp'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'senderId',
+          'receiverId',
+          'content',
+          'timestamp'
+        ])
+        && request.resource.data.senderId == request.auth.uid
+        && (
+          (
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
+            && request.resource.data.senderId ==
+              get(/databases/$(database)/documents/applications/$(applicationId)).data.studentId
+            && request.resource.data.receiverId ==
+              get(/databases/$(database)/documents/jobs/$(get(/databases/$(database)/documents/applications/$(applicationId)).data.jobId)).data.employerId
+          )
+          || (
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employer'
+            && request.resource.data.senderId ==
+              get(/databases/$(database)/documents/jobs/$(get(/databases/$(database)/documents/applications/$(applicationId)).data.jobId)).data.employerId
+            && request.resource.data.receiverId ==
+              get(/databases/$(database)/documents/applications/$(applicationId)).data.studentId
+          )
+        )
+        && request.resource.data.content is string
+        && request.resource.data.content.size() > 0
+        && request.resource.data.content.size() <= 2000
+        && request.resource.data.content.matches('.*\\S.*')
+        && request.resource.data.timestamp == request.time;
+
+      allow update, delete: if false;
     }
   }
 }

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:pallijob/screens/chat/application_chat_screen.dart';
 
 class EmployerApplication {
   const EmployerApplication({
@@ -11,6 +12,8 @@ class EmployerApplication {
     required this.status,
     required this.dateApplied,
     required this.jobUnavailable,
+    this.canChat = false,
+    this.canDecide = true,
   });
 
   final String id;
@@ -20,6 +23,8 @@ class EmployerApplication {
   final String status;
   final DateTime? dateApplied;
   final bool jobUnavailable;
+  final bool canChat;
+  final bool canDecide;
 }
 
 enum EmployerApplicationDecision { accepted, rejected }
@@ -71,26 +76,59 @@ class FirestoreEmployerApplicationsService
           fallback: 'Job information unavailable',
         ),
     };
-    final applicationSnapshot = await firestore
+    final jobOwners = {
+      for (final job in jobs.docs) job.id: job.data()['employerId'],
+    };
+    final applicationsById =
+        <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+    final employerApplications = await firestore
         .collection('applications')
         .where('employerId', isEqualTo: user.uid)
         .get();
+    for (final application in employerApplications.docs) {
+      applicationsById[application.id] = application;
+    }
+
+    final applicationsByJob = await Future.wait(
+      jobs.docs.map(
+        (job) => firestore
+            .collection('applications')
+            .where('jobId', isEqualTo: job.id)
+            .get(),
+      ),
+    );
+    for (final query in applicationsByJob) {
+      for (final application in query.docs) {
+        applicationsById[application.id] = application;
+      }
+    }
 
     final applications = <EmployerApplication>[];
-    for (final application in applicationSnapshot.docs) {
+    for (final application in applicationsById.values) {
       final data = application.data();
       final jobId = _textValue(data['jobId']);
       final jobTitle = jobTitles[jobId];
+      final actualEmployerId = jobOwners[jobId];
+      final applicantId = _textValue(data['studentId'], fallback: 'Unknown');
+      final ownershipMatches =
+          actualEmployerId != null &&
+          (!data.containsKey('employerId') ||
+              data['employerId'] == actualEmployerId);
       final appliedAt = data['dateApplied'];
       applications.add(
         EmployerApplication(
           id: application.id,
           jobId: jobId,
           jobTitle: jobTitle ?? 'Job no longer available',
-          applicantId: _textValue(data['studentId'], fallback: 'Unknown'),
+          applicantId: applicantId,
           status: _textValue(data['status'], fallback: 'Unknown'),
           dateApplied: appliedAt is Timestamp ? appliedAt.toDate() : null,
           jobUnavailable: jobTitle == null,
+          canChat:
+              ownershipMatches &&
+              applicantId != 'Unknown' &&
+              applicantId != user.uid,
+          canDecide: ownershipMatches,
         ),
       );
     }
@@ -142,12 +180,6 @@ class FirestoreEmployerApplicationsService
           'Only pending applications can be updated.',
         );
       }
-      if (data['employerId'] != user.uid) {
-        throw const EmployerApplicationDecisionException(
-          'You can only update applications for your own jobs.',
-        );
-      }
-
       final jobId = data['jobId'];
       if (jobId is! String || jobId.trim().isEmpty) {
         throw const EmployerApplicationDecisionException(
@@ -157,7 +189,9 @@ class FirestoreEmployerApplicationsService
       final job = await transaction.get(
         firestore.collection('jobs').doc(jobId),
       );
-      if (job.data()?['employerId'] != user.uid) {
+      if (job.data()?['employerId'] != user.uid ||
+          (data.containsKey('employerId') &&
+              data['employerId'] != job.data()?['employerId'])) {
         throw const EmployerApplicationDecisionException(
           'You can only update applications for jobs you own.',
         );
@@ -197,9 +231,14 @@ class EmployerApplicationsException implements Exception {
 }
 
 class EmployerApplicationsScreen extends StatefulWidget {
-  const EmployerApplicationsScreen({super.key, this.applicationsService});
+  const EmployerApplicationsScreen({
+    super.key,
+    this.applicationsService,
+    this.chatService,
+  });
 
   final EmployerApplicationsService? applicationsService;
+  final ApplicationChatService? chatService;
 
   @override
   State<EmployerApplicationsScreen> createState() =>
@@ -295,6 +334,16 @@ class _EmployerApplicationsScreenState
                     ),
                     onDecision: (decision) =>
                         _confirmDecision(application, decision),
+                    onChat: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ApplicationChatScreen(
+                          applicationId: application.id,
+                          chatService:
+                              widget.chatService ??
+                              const FirestoreApplicationChatService(),
+                        ),
+                      ),
+                    ),
                   );
                 },
               );
@@ -402,11 +451,13 @@ class _EmployerApplicationCard extends StatelessWidget {
     required this.application,
     required this.isUpdating,
     required this.onDecision,
+    required this.onChat,
   });
 
   final EmployerApplication application;
   final bool isUpdating;
   final ValueChanged<EmployerApplicationDecision> onDecision;
+  final VoidCallback onChat;
 
   @override
   Widget build(BuildContext context) {
@@ -467,7 +518,17 @@ class _EmployerApplicationCard extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (application.canChat) ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    key: ValueKey('chat-application-${application.id}'),
+                    onPressed: onChat,
+                    icon: const Icon(Icons.chat_bubble_outline_rounded),
+                    label: const Text('Chat'),
+                  ),
+                ],
                 if (application.status == 'pending' &&
+                    application.canDecide &&
                     !application.jobUnavailable) ...[
                   const SizedBox(height: 16),
                   Row(

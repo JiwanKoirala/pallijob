@@ -8,6 +8,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -86,7 +87,37 @@ try {
         status: 'pending',
         dateApplied: new Date(),
       }),
+      setDoc(doc(db, 'applications/missing-job_student-a'), {
+        jobId: 'missing-job',
+        studentId: 'student-a',
+        status: 'pending',
+        dateApplied: new Date(),
+      }),
+      setDoc(doc(db, 'applications/deleted-job_student-a'), {
+        jobId: 'deleted-job',
+        studentId: 'student-a',
+        employerId: 'employer-a',
+        status: 'pending',
+        dateApplied: new Date(),
+      }),
+      setDoc(doc(db, 'applications/deleted-parent_student-a'), {
+        jobId: 'job-a',
+        studentId: 'student-a',
+        employerId: 'employer-a',
+        status: 'pending',
+        dateApplied: new Date(),
+      }),
     ]);
+    await setDoc(
+      doc(db, 'applications/deleted-parent_student-a/messages/orphan'),
+      {
+        senderId: 'student-a',
+        receiverId: 'employer-a',
+        content: 'Orphaned message',
+        timestamp: new Date(),
+      },
+    );
+    await deleteDoc(doc(db, 'applications/deleted-parent_student-a'));
   });
 
   const employerA = environment.authenticatedContext('employer-a').firestore();
@@ -100,7 +131,7 @@ try {
     getDocs(
       query(
         collection(employerA, 'applications'),
-        where('employerId', '==', 'employer-a'),
+        where('jobId', '==', 'job-a'),
       ),
     ),
   );
@@ -110,7 +141,7 @@ try {
     [
       'job-a_student-a',
       'job-a_student-b',
-      'job-b_student-mismatch',
+      'legacy-job-a_student-b',
     ],
   );
 
@@ -118,19 +149,34 @@ try {
     getDocs(
       query(
         collection(employerB, 'applications'),
-        where('employerId', '==', 'employer-b'),
+        where('jobId', '==', 'job-b'),
       ),
     ),
   );
-  assert.equal(employerBApplications.size, 1);
-  assert.equal(employerBApplications.docs[0].id, 'job-b_student-b');
+  assert.equal(employerBApplications.size, 2);
+  assert.deepEqual(
+    employerBApplications.docs.map((application) => application.id).sort(),
+    ['job-b_student-b', 'job-b_student-mismatch'],
+  );
   await assertFails(
     getDocs(
       query(
         collection(employerB, 'applications'),
+        where('jobId', '==', 'job-a'),
+      ),
+    ),
+  );
+  const employerAStoredOwnerApplications = await assertSucceeds(
+    getDocs(
+      query(
+        collection(employerA, 'applications'),
         where('employerId', '==', 'employer-a'),
       ),
     ),
+  );
+  assert.equal(employerAStoredOwnerApplications.size, 4);
+  await assertSucceeds(
+    getDoc(doc(employerA, 'applications/deleted-job_student-a')),
   );
   await assertFails(getDocs(collection(employerA, 'applications')));
   await assertFails(getDoc(doc(employerB, 'applications/job-a_student-a')));
@@ -144,8 +190,12 @@ try {
     ),
   );
   assert.deepEqual(
-    studentAApplications.docs.map((application) => application.id),
-    ['job-a_student-a'],
+    studentAApplications.docs.map((application) => application.id).sort(),
+    [
+      'deleted-job_student-a',
+      'job-a_student-a',
+      'missing-job_student-a',
+    ],
   );
   await assertFails(getDoc(doc(studentA, 'applications/job-a_student-b')));
   await assertFails(
@@ -158,6 +208,176 @@ try {
   );
   await assertFails(getDocs(collection(studentA, 'applications')));
   await assertFails(getDocs(collection(signedOut, 'applications')));
+
+  const studentAMessages = collection(
+    studentA,
+    'applications/job-a_student-a/messages',
+  );
+  const employerAMessages = collection(
+    employerA,
+    'applications/job-a_student-a/messages',
+  );
+  await assertSucceeds(getDocs(studentAMessages));
+  await assertSucceeds(getDocs(employerAMessages));
+  await assertFails(
+    getDocs(collection(studentB, 'applications/job-a_student-a/messages')),
+  );
+  await assertFails(
+    getDocs(collection(employerB, 'applications/job-a_student-a/messages')),
+  );
+  await assertFails(
+    getDocs(collection(studentNew, 'applications/job-a_student-a/messages')),
+  );
+  await assertFails(
+    getDocs(collection(signedOut, 'applications/job-a_student-a/messages')),
+  );
+
+  const studentMessage = doc(studentAMessages, 'student-message');
+  await assertSucceeds(
+    setDoc(studentMessage, {
+      senderId: 'student-a',
+      receiverId: 'employer-a',
+      content: 'Hello employer',
+      timestamp: serverTimestamp(),
+    }),
+  );
+  const employerMessage = doc(employerAMessages, 'employer-message');
+  await assertSucceeds(
+    setDoc(employerMessage, {
+      senderId: 'employer-a',
+      receiverId: 'student-a',
+      content: 'Hello student',
+      timestamp: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    setDoc(doc(studentAMessages, 'impersonated-sender'), {
+      senderId: 'employer-a',
+      receiverId: 'student-a',
+      content: 'Not the sender',
+      timestamp: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    setDoc(doc(studentAMessages, 'wrong-receiver'), {
+      senderId: 'student-a',
+      receiverId: 'student-b',
+      content: 'Wrong recipient',
+      timestamp: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    setDoc(doc(employerAMessages, 'employer-impersonation'), {
+      senderId: 'student-a',
+      receiverId: 'employer-a',
+      content: 'Not the sender',
+      timestamp: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    setDoc(doc(studentAMessages, 'extra-field'), {
+      senderId: 'student-a',
+      receiverId: 'employer-a',
+      content: 'Unexpected metadata',
+      timestamp: serverTimestamp(),
+      edited: false,
+    }),
+  );
+  await assertFails(
+    setDoc(doc(studentAMessages, 'blank-content'), {
+      senderId: 'student-a',
+      receiverId: 'employer-a',
+      content: '   ',
+      timestamp: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    setDoc(doc(studentAMessages, 'long-content'), {
+      senderId: 'student-a',
+      receiverId: 'employer-a',
+      content: 'x'.repeat(2001),
+      timestamp: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    setDoc(doc(studentAMessages, 'wrong-timestamp'), {
+      senderId: 'student-a',
+      receiverId: 'employer-a',
+      content: 'Invalid timestamp',
+      timestamp: new Date(),
+    }),
+  );
+  await assertFails(
+    setDoc(doc(studentAMessages, 'missing-receiver'), {
+      senderId: 'student-a',
+      content: 'Missing receiver',
+      timestamp: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    updateDoc(studentMessage, { content: 'Edited message' }),
+  );
+  await assertFails(deleteDoc(studentMessage));
+  await assertFails(
+    getDocs(collection(studentA, 'applications/missing-job_student-a/messages')),
+  );
+  await assertFails(
+    getDocs(collection(studentA, 'applications/deleted-job_student-a/messages')),
+  );
+  await assertFails(
+    setDoc(
+      doc(studentA, 'applications/missing-job_student-a/messages/new'),
+      {
+        senderId: 'student-a',
+        receiverId: 'employer-a',
+        content: 'Missing job',
+        timestamp: serverTimestamp(),
+      },
+    ),
+  );
+  await assertFails(
+    getDocs(
+      collection(studentA, 'applications/deleted-parent_student-a/messages'),
+    ),
+  );
+  await assertFails(
+    setDoc(
+      doc(studentA, 'applications/deleted-parent_student-a/messages/new'),
+      {
+        senderId: 'student-a',
+        receiverId: 'employer-a',
+        content: 'Missing application',
+        timestamp: serverTimestamp(),
+      },
+    ),
+  );
+
+  const legacyMessages = collection(
+    studentB,
+    'applications/legacy-job-a_student-b/messages',
+  );
+  await assertSucceeds(getDocs(legacyMessages));
+  await assertSucceeds(
+    setDoc(doc(legacyMessages, 'legacy-message'), {
+      senderId: 'student-b',
+      receiverId: 'employer-a',
+      content: 'Legacy application chat works',
+      timestamp: serverTimestamp(),
+    }),
+  );
+  await assertSucceeds(
+    getDocs(
+      collection(
+        employerA,
+        'applications/legacy-job-a_student-b/messages',
+      ),
+    ),
+  );
+  await assertSucceeds(
+    updateDoc(doc(employerA, 'applications/legacy-job-a_student-b'), {
+      status: 'accepted',
+    }),
+  );
 
   const newApplication = doc(studentNew, 'applications/job-a_student-new');
   await assertSucceeds(
@@ -305,6 +525,11 @@ try {
   console.log('PASS only the owning Employer can accept or reject a pending application');
   console.log('PASS application ownership and date fields cannot change');
   console.log('PASS final decisions and invalid status transitions are denied');
+  console.log('PASS legacy applications are listed by authoritative job ownership');
+  console.log('PASS only application participants can read and send messages');
+  console.log('PASS chat messages enforce participant identity, schema, and immutability');
+  console.log('PASS deleted applications and missing jobs deny chat access');
+  console.log('PASS legacy applications without employerId use the owning job safely');
 } finally {
   await environment.cleanup();
 }

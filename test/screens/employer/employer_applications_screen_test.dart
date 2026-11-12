@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pallijob/screens/employer/employer_applications_screen.dart';
 import 'package:pallijob/screens/employer/employer_dashboard_screen.dart';
 
+import '../../support/fake_application_chat_service.dart';
+
 final employerApplication = EmployerApplication(
   id: 'job-1_student-1',
   jobId: 'job-1',
@@ -51,6 +53,41 @@ void main() {
     expect(find.text('student-1'), findsOneWidget);
     expect(find.text('Pending'), findsOneWidget);
     expect(find.textContaining('Nov'), findsOneWidget);
+    expect(find.text('Chat'), findsNothing);
+  });
+
+  testWidgets('shows an authorized Chat entry and opens its application chat', (
+    tester,
+  ) async {
+    const application = EmployerApplication(
+      id: 'job-1_student-1',
+      jobId: 'job-1',
+      jobTitle: 'Cafe Assistant',
+      applicantId: 'student-1',
+      status: 'pending',
+      dateApplied: null,
+      jobUnavailable: false,
+      canChat: true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EmployerApplicationsScreen(
+          applicationsService: _FakeEmployerApplicationsService(
+            Future.value([application]),
+          ),
+          chatService: FakeApplicationChatService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('chat-application-job-1_student-1')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No messages yet'), findsOneWidget);
+    expect(find.text('Write a message'), findsOneWidget);
   });
 
   testWidgets('accepts a pending application after confirmation', (
@@ -64,21 +101,19 @@ void main() {
     );
     await _pumpService(tester, service);
 
-    await tester.tap(find.byKey(const ValueKey('accept-application-job-1_student-1')));
+    await tester.tap(
+      find.byKey(const ValueKey('accept-application-job-1_student-1')),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Accept application?'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('confirm-decision-job-1_student-1')));
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-decision-job-1_student-1')),
+    );
     await tester.pumpAndSettle();
 
-    expect(
-      service.decisions,
-      [
-        (
-          'job-1_student-1',
-          EmployerApplicationDecision.accepted,
-        ),
-      ],
-    );
+    expect(service.decisions, [
+      ('job-1_student-1', EmployerApplicationDecision.accepted),
+    ]);
     expect(find.text('Accepted'), findsOneWidget);
     expect(find.text('Accept'), findsNothing);
     expect(find.text('Reject'), findsNothing);
@@ -105,15 +140,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      service.decisions,
-      [
-        (
-          'job-1_student-1',
-          EmployerApplicationDecision.rejected,
-        ),
-      ],
-    );
+    expect(service.decisions, [
+      ('job-1_student-1', EmployerApplicationDecision.rejected),
+    ]);
     expect(find.text('Rejected'), findsOneWidget);
     expect(find.text('Accept'), findsNothing);
     expect(find.text('Reject'), findsNothing);
@@ -157,10 +186,7 @@ void main() {
       dateApplied: null,
       jobUnavailable: false,
     );
-    await _pumpApplications(tester, [
-      acceptedApplication,
-      rejectedApplication,
-    ]);
+    await _pumpApplications(tester, [acceptedApplication, rejectedApplication]);
 
     expect(find.text('Accepted'), findsOneWidget);
     expect(find.text('Rejected'), findsOneWidget);
@@ -225,7 +251,10 @@ void main() {
 
     await _chooseAndConfirm(tester, 'accept');
 
-    expect(find.textContaining('Firestore denied this decision'), findsOneWidget);
+    expect(
+      find.textContaining('Firestore denied this decision'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('reports other decision errors', (tester) async {
@@ -237,7 +266,10 @@ void main() {
 
     await _chooseAndConfirm(tester, 'reject');
 
-    expect(find.textContaining('Could not update the application'), findsOneWidget);
+    expect(
+      find.textContaining('Could not update the application'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('shows a missing-job notice without hiding application history', (
@@ -356,20 +388,14 @@ Future<void> _pumpService(
   _FakeEmployerApplicationsService service,
 ) async {
   await tester.pumpWidget(
-    MaterialApp(
-      home: EmployerApplicationsScreen(
-        applicationsService: service,
-      ),
-    ),
+    MaterialApp(home: EmployerApplicationsScreen(applicationsService: service)),
   );
   await tester.pumpAndSettle();
 }
 
 Future<void> _chooseAndConfirm(WidgetTester tester, String decision) async {
   await tester.tap(
-    find.byKey(
-      ValueKey('$decision-application-job-1_student-1'),
-    ),
+    find.byKey(ValueKey('$decision-application-job-1_student-1')),
   );
   await tester.pumpAndSettle();
   await tester.tap(
@@ -403,11 +429,7 @@ Future<void> _pumpError(WidgetTester tester, Object error) async {
 }
 
 class _FakeEmployerApplicationsService implements EmployerApplicationsService {
-  _FakeEmployerApplicationsService(
-    this.result, {
-    this.onLoad,
-    this.onUpdate,
-  });
+  _FakeEmployerApplicationsService(this.result, {this.onLoad, this.onUpdate});
 
   final Future<List<EmployerApplication>> result;
   final Future<List<EmployerApplication>> Function(int call)? onLoad;
