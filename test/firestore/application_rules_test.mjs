@@ -17,6 +17,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 
 const root = new URL('../../', import.meta.url);
@@ -45,6 +46,7 @@ try {
       setDoc(doc(db, 'users/student-a'), { role: 'student' }),
       setDoc(doc(db, 'users/student-b'), { role: 'student' }),
       setDoc(doc(db, 'users/student-new'), { role: 'student' }),
+      setDoc(doc(db, 'users/student-atomic'), { role: 'student' }),
       setDoc(doc(db, 'jobs/job-a'), {
         employerId: 'employer-a',
         title: 'Employer A job',
@@ -125,6 +127,7 @@ try {
   const studentA = environment.authenticatedContext('student-a').firestore();
   const studentB = environment.authenticatedContext('student-b').firestore();
   const studentNew = environment.authenticatedContext('student-new').firestore();
+  const studentAtomic = environment.authenticatedContext('student-atomic').firestore();
   const signedOut = environment.unauthenticatedContext().firestore();
 
   const employerAApplications = await assertSucceeds(
@@ -233,23 +236,148 @@ try {
   );
 
   const studentMessage = doc(studentAMessages, 'student-message');
+  const studentMessageNotification = doc(
+    studentA,
+    'users/employer-a/notifications/job-a_student-a__student-message',
+  );
+  const studentMessageBatch = writeBatch(studentA);
+  studentMessageBatch.set(studentMessage, {
+    senderId: 'student-a',
+    receiverId: 'employer-a',
+    content: 'Hello employer',
+    timestamp: serverTimestamp(),
+  });
+  studentMessageBatch.set(studentMessageNotification, {
+    type: 'new_message',
+    applicationId: 'job-a_student-a',
+    jobTitle: 'Employer A job',
+    messageId: 'student-message',
+    createdAt: serverTimestamp(),
+    readAt: null,
+  });
   await assertSucceeds(
-    setDoc(studentMessage, {
-      senderId: 'student-a',
-      receiverId: 'employer-a',
-      content: 'Hello employer',
-      timestamp: serverTimestamp(),
-    }),
+    studentMessageBatch.commit(),
   );
   const employerMessage = doc(employerAMessages, 'employer-message');
-  await assertSucceeds(
-    setDoc(employerMessage, {
-      senderId: 'employer-a',
-      receiverId: 'student-a',
-      content: 'Hello student',
-      timestamp: serverTimestamp(),
-    }),
+  const employerMessageBatch = writeBatch(employerA);
+  employerMessageBatch.set(employerMessage, {
+    senderId: 'employer-a',
+    receiverId: 'student-a',
+    content: 'Hello student',
+    timestamp: serverTimestamp(),
+  });
+  employerMessageBatch.set(
+    doc(employerA, 'users/student-a/notifications/job-a_student-a__employer-message'),
+    {
+      type: 'new_message',
+      applicationId: 'job-a_student-a',
+      jobTitle: 'Employer A job',
+      messageId: 'employer-message',
+      createdAt: serverTimestamp(),
+      readAt: null,
+    },
   );
+  await assertSucceeds(employerMessageBatch.commit());
+  const wrongRecipientBatch = writeBatch(studentA);
+  wrongRecipientBatch.set(
+    doc(studentAMessages, 'wrong-notification-recipient'),
+    {
+      senderId: 'student-a',
+      receiverId: 'employer-a',
+      content: 'Notification recipient must match the message',
+      timestamp: serverTimestamp(),
+    },
+  );
+  wrongRecipientBatch.set(
+    doc(
+      studentA,
+      'users/student-b/notifications/job-a_student-a__wrong-notification-recipient',
+    ),
+    {
+      type: 'new_message',
+      applicationId: 'job-a_student-a',
+      jobTitle: 'Employer A job',
+      messageId: 'wrong-notification-recipient',
+      createdAt: serverTimestamp(),
+      readAt: null,
+    },
+  );
+  await assertFails(wrongRecipientBatch.commit());
+
+  const wrongTimestampBatch = writeBatch(studentA);
+  wrongTimestampBatch.set(
+    doc(studentAMessages, 'wrong-notification-timestamp'),
+    {
+      senderId: 'student-a',
+      receiverId: 'employer-a',
+      content: 'Notification timestamp must match the message event',
+      timestamp: serverTimestamp(),
+    },
+  );
+  wrongTimestampBatch.set(
+    doc(
+      studentA,
+      'users/employer-a/notifications/job-a_student-a__wrong-notification-timestamp',
+    ),
+    {
+      type: 'new_message',
+      applicationId: 'job-a_student-a',
+      jobTitle: 'Employer A job',
+      messageId: 'wrong-notification-timestamp',
+      createdAt: new Date('2026-11-01T00:00:00Z'),
+      readAt: null,
+    },
+  );
+  await assertFails(wrongTimestampBatch.commit());
+
+  const wrongNotificationIdBatch = writeBatch(studentA);
+  wrongNotificationIdBatch.set(
+    doc(studentAMessages, 'wrong-notification-id'),
+    {
+      senderId: 'student-a',
+      receiverId: 'employer-a',
+      content: 'Notification ID must be deterministic',
+      timestamp: serverTimestamp(),
+    },
+  );
+  wrongNotificationIdBatch.set(
+    doc(studentA, 'users/employer-a/notifications/wrong-deterministic-id'),
+    {
+      type: 'new_message',
+      applicationId: 'job-a_student-a',
+      jobTitle: 'Employer A job',
+      messageId: 'wrong-notification-id',
+      createdAt: serverTimestamp(),
+      readAt: null,
+    },
+  );
+  await assertFails(wrongNotificationIdBatch.commit());
+
+  const wrongNotificationTypeBatch = writeBatch(studentA);
+  wrongNotificationTypeBatch.set(
+    doc(studentAMessages, 'wrong-notification-type'),
+    {
+      senderId: 'student-a',
+      receiverId: 'employer-a',
+      content: 'Notification type must match the source event',
+      timestamp: serverTimestamp(),
+    },
+  );
+  wrongNotificationTypeBatch.set(
+    doc(
+      studentA,
+      'users/employer-a/notifications/job-a_student-a__wrong-notification-type',
+    ),
+    {
+      type: 'application_accepted',
+      applicationId: 'job-a_student-a',
+      jobTitle: 'Employer A job',
+      createdAt: serverTimestamp(),
+      readAt: null,
+    },
+  );
+  await assertFails(wrongNotificationTypeBatch.commit());
+
   await assertFails(
     setDoc(doc(studentAMessages, 'impersonated-sender'), {
       senderId: 'employer-a',
@@ -257,6 +385,30 @@ try {
       content: 'Not the sender',
       timestamp: serverTimestamp(),
     }),
+  );
+  await assertSucceeds(
+    setDoc(doc(studentAMessages, 'missing-notification'), {
+      senderId: 'student-a',
+      receiverId: 'employer-a',
+      content: 'Legacy message without a notification',
+      timestamp: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    setDoc(
+      doc(
+        studentA,
+        'users/employer-a/notifications/job-a_student-a__missing-notification',
+      ),
+      {
+        type: 'new_message',
+        applicationId: 'job-a_student-a',
+        jobTitle: 'Employer A job',
+        messageId: 'missing-notification',
+        createdAt: serverTimestamp(),
+        readAt: null,
+      },
+    ),
   );
   await assertFails(
     setDoc(doc(studentAMessages, 'wrong-receiver'), {
@@ -357,13 +509,30 @@ try {
     'applications/legacy-job-a_student-b/messages',
   );
   await assertSucceeds(getDocs(legacyMessages));
+  const legacyMessage = doc(legacyMessages, 'legacy-message');
   await assertSucceeds(
-    setDoc(doc(legacyMessages, 'legacy-message'), {
+    setDoc(legacyMessage, {
       senderId: 'student-b',
       receiverId: 'employer-a',
       content: 'Legacy application chat works',
       timestamp: serverTimestamp(),
     }),
+  );
+  await assertFails(
+    setDoc(
+      doc(
+        studentB,
+        'users/employer-a/notifications/legacy-job-a_student-b__legacy-message',
+      ),
+      {
+        type: 'new_message',
+        applicationId: 'legacy-job-a_student-b',
+        jobTitle: 'Employer A job',
+        messageId: 'legacy-message',
+        createdAt: serverTimestamp(),
+        readAt: null,
+      },
+    ),
   );
   await assertSucceeds(
     getDocs(
@@ -373,16 +542,112 @@ try {
       ),
     ),
   );
-  await assertSucceeds(
-    updateDoc(doc(employerA, 'applications/legacy-job-a_student-b'), {
+  const legacyDecisionBatch = writeBatch(employerA);
+  legacyDecisionBatch.update(
+    doc(employerA, 'applications/legacy-job-a_student-b'),
+    {
       status: 'accepted',
-    }),
+      statusUpdatedAt: serverTimestamp(),
+    },
   );
+  legacyDecisionBatch.set(
+    doc(
+      employerA,
+      'users/student-b/notifications/status__accepted__legacy-job-a_student-b',
+    ),
+    {
+      type: 'application_accepted',
+      applicationId: 'legacy-job-a_student-b',
+      jobTitle: 'Employer A job',
+      createdAt: serverTimestamp(),
+      readAt: null,
+    },
+  );
+  await assertSucceeds(legacyDecisionBatch.commit());
 
   const newApplication = doc(studentNew, 'applications/job-a_student-new');
-  await assertSucceeds(
-    setDoc(newApplication, {
-      jobId: 'job-a',
+  await assertSucceeds(setDoc(newApplication, {
+    jobId: 'job-a',
+    studentId: 'student-new',
+    employerId: 'employer-a',
+    status: 'pending',
+    dateApplied: serverTimestamp(),
+  }));
+  await assertFails(
+    setDoc(
+      doc(
+        studentNew,
+        'users/employer-a/notifications/new-application__job-a_student-new',
+      ),
+      {
+        type: 'new_application',
+        applicationId: 'job-a_student-new',
+        jobTitle: 'Employer A job',
+        createdAt: serverTimestamp(),
+        readAt: null,
+      },
+    ),
+  );
+  await assertFails(
+    setDoc(
+      doc(
+        studentNew,
+        'users/employer-a/notifications/new-application__job-a_nonexistent',
+      ),
+      {
+        type: 'new_application',
+        applicationId: 'job-a_nonexistent',
+        jobTitle: 'Employer A job',
+        createdAt: serverTimestamp(),
+        readAt: null,
+      },
+    ),
+  );
+
+  const atomicApplication = doc(
+    studentAtomic,
+    'applications/job-a_student-atomic',
+  );
+  const newApplicationBatch = writeBatch(studentAtomic);
+  newApplicationBatch.set(atomicApplication, {
+    jobId: 'job-a',
+    studentId: 'student-atomic',
+    employerId: 'employer-a',
+    status: 'pending',
+    dateApplied: serverTimestamp(),
+  });
+  newApplicationBatch.set(
+    doc(
+      studentAtomic,
+      'users/employer-a/notifications/new-application__job-a_student-atomic',
+    ),
+    {
+      type: 'new_application',
+      applicationId: 'job-a_student-atomic',
+      jobTitle: 'Employer A job',
+      createdAt: serverTimestamp(),
+      readAt: null,
+    },
+  );
+  await assertSucceeds(newApplicationBatch.commit());
+  await assertFails(
+    setDoc(
+      doc(
+        studentAtomic,
+        'users/employer-a/notifications/new-application__job-a_student-atomic',
+      ),
+      {
+        type: 'new_application',
+        applicationId: 'job-a_student-atomic',
+        jobTitle: 'Employer A job',
+        createdAt: serverTimestamp(),
+        readAt: null,
+      },
+    ),
+  );
+  await assertFails(
+    setDoc(doc(studentNew, 'applications/job-b_student-new'), {
+      jobId: 'job-b',
       studentId: 'student-new',
       employerId: 'employer-a',
       status: 'pending',
@@ -484,21 +749,171 @@ try {
       status: 'pending',
     }),
   );
+  await assertFails(
+    updateDoc(employerASecondApplication, {
+      status: 'rejected',
+      statusUpdatedAt: serverTimestamp(),
+    }),
+  );
+  const invalidStatusTimestampBatch = writeBatch(employerA);
+  invalidStatusTimestampBatch.update(
+    employerASecondApplication,
+    {
+      status: 'rejected',
+      statusUpdatedAt: new Date('2026-11-01T00:00:00Z'),
+    },
+  );
+  invalidStatusTimestampBatch.set(
+    doc(
+      employerA,
+      'users/student-b/notifications/status__rejected__job-a_student-b',
+    ),
+    {
+      type: 'application_rejected',
+      applicationId: 'job-a_student-b',
+      jobTitle: 'Employer A job',
+      createdAt: serverTimestamp(),
+      readAt: null,
+    },
+  );
+  await assertFails(invalidStatusTimestampBatch.commit());
 
   await assertSucceeds(
     updateDoc(employerAApplication, {
       status: 'accepted',
     }),
   );
-  await assertFails(
-    updateDoc(employerAApplication, {
-      status: 'rejected',
-    }),
-  );
   await assertSucceeds(
     updateDoc(employerASecondApplication, {
       status: 'rejected',
     }),
+  );
+  await assertFails(
+    setDoc(
+      doc(
+        employerA,
+        'users/student-a/notifications/status__accepted__job-a_student-a',
+      ),
+      {
+        type: 'application_accepted',
+        applicationId: 'job-a_student-a',
+        jobTitle: 'Employer A job',
+        createdAt: serverTimestamp(),
+        readAt: null,
+      },
+    ),
+  );
+
+  const acceptedBatch = writeBatch(employerA);
+  acceptedBatch.update(
+    doc(employerA, 'applications/job-a_student-atomic'),
+    {
+      status: 'accepted',
+      statusUpdatedAt: serverTimestamp(),
+    },
+  );
+  acceptedBatch.set(
+    doc(
+      employerA,
+      'users/student-atomic/notifications/status__accepted__job-a_student-atomic',
+    ),
+    {
+      type: 'application_accepted',
+      applicationId: 'job-a_student-atomic',
+      jobTitle: 'Employer A job',
+      createdAt: serverTimestamp(),
+      readAt: null,
+    },
+  );
+  await assertSucceeds(acceptedBatch.commit());
+
+  const rejectedBatch = writeBatch(employerB);
+  rejectedBatch.update(doc(employerB, 'applications/job-b_student-b'), {
+    status: 'rejected',
+    statusUpdatedAt: serverTimestamp(),
+  });
+  rejectedBatch.set(
+    doc(
+      employerB,
+      'users/student-b/notifications/status__rejected__job-b_student-b',
+    ),
+    {
+      type: 'application_rejected',
+      applicationId: 'job-b_student-b',
+      jobTitle: 'Employer B job',
+      createdAt: serverTimestamp(),
+      readAt: null,
+    },
+  );
+  await assertSucceeds(rejectedBatch.commit());
+
+  const studentANotifications = collection(
+    studentA,
+    'users/student-a/notifications',
+  );
+  const studentAEvents = await assertSucceeds(
+    getDocs(studentANotifications),
+  );
+  assert.equal(studentAEvents.size, 1);
+  const employerAEvents = await assertSucceeds(
+    getDocs(collection(employerA, 'users/employer-a/notifications')),
+  );
+  assert.equal(employerAEvents.size, 2);
+  await assertFails(
+    getDoc(
+      doc(
+        studentB,
+        'users/student-atomic/notifications/status__accepted__job-a_student-atomic',
+      ),
+    ),
+  );
+  await assertFails(
+    getDocs(collection(studentA, 'users/employer-a/notifications')),
+  );
+
+  const studentAStatusNotification = doc(
+    studentAtomic,
+    'users/student-atomic/notifications/status__accepted__job-a_student-atomic',
+  );
+  await assertSucceeds(
+    updateDoc(studentAStatusNotification, {
+      readAt: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    updateDoc(studentAStatusNotification, {
+      jobTitle: 'Changed job title',
+    }),
+  );
+  await assertFails(
+    updateDoc(studentAStatusNotification, {
+      readAt: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    setDoc(
+      doc(studentA, 'users/student-a/notifications/forged-event'),
+      {
+        type: 'application_accepted',
+        applicationId: 'job-a_student-a',
+        jobTitle: 'Employer A job',
+        createdAt: serverTimestamp(),
+        readAt: null,
+      },
+    ),
+  );
+  await assertFails(
+    setDoc(
+      doc(studentA, 'users/student-b/notifications/forged-recipient'),
+      {
+        type: 'new_message',
+        applicationId: 'job-a_student-a',
+        jobTitle: 'Employer A job',
+        messageId: 'missing-message',
+        createdAt: serverTimestamp(),
+        readAt: null,
+      },
+    ),
   );
 
   let finalizedApplication;
@@ -525,6 +940,11 @@ try {
   console.log('PASS only the owning Employer can accept or reject a pending application');
   console.log('PASS application ownership and date fields cannot change');
   console.log('PASS final decisions and invalid status transitions are denied');
+  console.log('PASS legacy application, decision, and message writes work without notifications');
+  console.log('PASS updated application, decision, and message events atomically create notifications');
+  console.log('PASS notifications cannot be forged, duplicated, stale, misaddressed, or mistimed');
+  console.log('PASS users can read only their own notification records');
+  console.log('PASS only recipients can mark notifications read and cannot forge events');
   console.log('PASS legacy applications are listed by authoritative job ownership');
   console.log('PASS only application participants can read and send messages');
   console.log('PASS chat messages enforce participant identity, schema, and immutability');

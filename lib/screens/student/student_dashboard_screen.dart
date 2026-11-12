@@ -1,12 +1,16 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:pallijob/screens/auth/welcome_screen.dart';
+import 'package:pallijob/screens/notifications/in_app_notification_service.dart';
+import 'package:pallijob/screens/notifications/in_app_notifications_screen.dart';
 import 'package:pallijob/screens/student/student_applications_screen.dart';
 import 'package:pallijob/screens/student/student_job_listings_screen.dart';
 import 'package:pallijob/screens/student/student_profile_screen.dart';
 
 class StudentDashboardScreen extends StatelessWidget {
-  const StudentDashboardScreen({super.key});
+  const StudentDashboardScreen({super.key, this.notificationsService});
+
+  final InAppNotificationsService? notificationsService;
 
   static const _modules = [
     _DashboardModule(
@@ -18,6 +22,11 @@ class StudentDashboardScreen extends StatelessWidget {
       title: 'My Applications',
       description: 'Keep track of your applications',
       icon: Icons.assignment_outlined,
+    ),
+    _DashboardModule(
+      title: 'Notifications',
+      description: 'Application decisions and new messages',
+      icon: Icons.notifications_none_rounded,
     ),
     _DashboardModule(
       title: 'Messages',
@@ -106,6 +115,17 @@ class StudentDashboardScreen extends StatelessWidget {
                                   MaterialPageRoute<void>(
                                     builder: (_) =>
                                         const StudentApplicationsScreen(),
+                                  ),
+                                )
+                              : module.title == 'Notifications'
+                              ? () => Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => InAppNotificationsScreen(
+                                      role: InAppNotificationRole.student,
+                                      notificationsService:
+                                          notificationsService ??
+                                          const FirestoreInAppNotificationsService(),
+                                    ),
                                   ),
                                 )
                               : module.title == 'My Profile'

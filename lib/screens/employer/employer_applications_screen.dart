@@ -180,6 +180,12 @@ class FirestoreEmployerApplicationsService
           'Only pending applications can be updated.',
         );
       }
+      final studentId = data['studentId'];
+      if (studentId is! String || studentId.trim().isEmpty) {
+        throw const EmployerApplicationDecisionException(
+          'This application does not have a valid student applicant.',
+        );
+      }
       final jobId = data['jobId'];
       if (jobId is! String || jobId.trim().isEmpty) {
         throw const EmployerApplicationDecisionException(
@@ -201,8 +207,29 @@ class FirestoreEmployerApplicationsService
           'Your session changed. Please sign in again.',
         );
       }
+      final jobTitle = job.data()?['title'];
+      if (jobTitle is! String || jobTitle.trim().isEmpty) {
+        throw const EmployerApplicationDecisionException(
+          'This job is missing its title, so the application cannot be updated.',
+        );
+      }
 
-      transaction.update(applicationReference, {'status': decision.name});
+      final notificationReference = firestore
+          .collection('users')
+          .doc(studentId)
+          .collection('notifications')
+          .doc('status__${decision.name}__$applicationId');
+      transaction.update(applicationReference, {
+        'status': decision.name,
+        'statusUpdatedAt': FieldValue.serverTimestamp(),
+      });
+      transaction.set(notificationReference, {
+        'type': 'application_${decision.name}',
+        'applicationId': applicationId,
+        'jobTitle': jobTitle,
+        'createdAt': FieldValue.serverTimestamp(),
+        'readAt': null,
+      });
     });
   }
 

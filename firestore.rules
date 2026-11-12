@@ -27,6 +27,139 @@ service cloud.firestore {
 
       // Profile deletion is not permitted.
       allow delete: if false;
+
+      match /notifications/{notificationId} {
+        function validNotificationFields() {
+          return request.resource.data.keys().hasAll([
+              'type',
+              'applicationId',
+              'jobTitle',
+              'createdAt',
+              'readAt'
+            ])
+            && request.resource.data.keys().hasOnly([
+              'type',
+              'applicationId',
+              'jobTitle',
+              'createdAt',
+              'readAt',
+              'messageId'
+            ])
+            && (
+              (
+                request.resource.data.type == 'new_message'
+                && request.resource.data.messageId is string
+              )
+              || (
+                request.resource.data.type != 'new_message'
+                && !('messageId' in request.resource.data)
+              )
+            )
+            && request.resource.data.applicationId is string
+            && request.resource.data.jobTitle is string
+            && request.resource.data.jobTitle.size() > 0
+            && request.resource.data.createdAt == request.time
+            && request.resource.data.readAt == null;
+        }
+
+        function validNewApplicationNotification() {
+          let applicationPath = /databases/$(database)/documents/applications/$(request.resource.data.applicationId);
+          let jobPath = /databases/$(database)/documents/jobs/$(getAfter(applicationPath).data.jobId);
+          return request.auth != null
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
+            && notificationId == 'new-application__' + request.resource.data.applicationId
+            && existsAfter(applicationPath)
+            && !exists(applicationPath)
+            && getAfter(applicationPath).data.studentId == request.auth.uid
+            && getAfter(applicationPath).data.status == 'pending'
+            && getAfter(applicationPath).data.dateApplied == request.time
+            && getAfter(applicationPath).data.employerId == userId
+            && exists(jobPath)
+            && get(jobPath).data.employerId == userId
+            && request.resource.data.jobTitle == get(jobPath).data.title;
+        }
+
+        function validApplicationDecisionNotification() {
+          let applicationPath = /databases/$(database)/documents/applications/$(request.resource.data.applicationId);
+          let jobPath = /databases/$(database)/documents/jobs/$(get(applicationPath).data.jobId);
+          let decision = request.resource.data.type == 'application_accepted'
+            ? 'accepted'
+            : 'rejected';
+          return request.auth != null
+            && request.resource.data.type in [
+              'application_accepted',
+              'application_rejected'
+            ]
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employer'
+            && notificationId == 'status__' + decision + '__' + request.resource.data.applicationId
+            && exists(applicationPath)
+            && get(applicationPath).data.status == 'pending'
+            && getAfter(applicationPath).data.status == decision
+            && getAfter(applicationPath).data.statusUpdatedAt == request.time
+            && get(applicationPath).data.studentId == userId
+            && get(jobPath).data.employerId == request.auth.uid
+            && request.resource.data.jobTitle == get(jobPath).data.title;
+        }
+
+        function validMessageNotification() {
+          let applicationPath = /databases/$(database)/documents/applications/$(request.resource.data.applicationId);
+          let jobPath = /databases/$(database)/documents/jobs/$(get(applicationPath).data.jobId);
+          let messagePath = /databases/$(database)/documents/applications/$(request.resource.data.applicationId)/messages/$(request.resource.data.messageId);
+          return request.auth != null
+            && request.resource.data.type == 'new_message'
+            && request.resource.data.messageId is string
+            && notificationId == request.resource.data.applicationId + '__' + request.resource.data.messageId
+            && exists(applicationPath)
+            && exists(jobPath)
+            && existsAfter(messagePath)
+            && !exists(messagePath)
+            && getAfter(messagePath).data.senderId == request.auth.uid
+            && getAfter(messagePath).data.receiverId == userId
+            && request.resource.data.jobTitle == get(jobPath).data.title
+            && (
+              (
+                get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
+                && get(applicationPath).data.studentId == request.auth.uid
+                && get(jobPath).data.employerId == userId
+              )
+              || (
+                get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'employer'
+                && get(jobPath).data.employerId == request.auth.uid
+                && get(applicationPath).data.studentId == userId
+              )
+            );
+        }
+
+        allow get, list: if request.auth != null
+          && request.auth.uid == userId;
+
+        allow create: if request.auth != null
+          && request.auth.uid != userId
+          && validNotificationFields()
+          && (
+            (
+              request.resource.data.type == 'new_application'
+              && validNewApplicationNotification()
+            )
+            || (
+              request.resource.data.type in [
+                'application_accepted',
+                'application_rejected'
+              ]
+              && validApplicationDecisionNotification()
+            )
+            || validMessageNotification()
+          );
+
+        allow update: if request.auth != null
+          && request.auth.uid == userId
+          && resource.data.readAt == null
+          && request.resource.data.readAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['readAt']);
+
+        allow delete: if false;
+      }
     }
 
     match /jobs/{jobId} {
@@ -101,6 +234,20 @@ service cloud.firestore {
     }
 
     match /applications/{applicationId} {
+      function notificationPath(recipientId, notificationId) {
+        return /databases/$(database)/documents/users/$(recipientId)/notifications/$(notificationId);
+      }
+
+      function notificationMatchesIfPresent(recipientId, notificationId, type) {
+        let path = notificationPath(recipientId, notificationId);
+        return !existsAfter(path)
+          || (
+            getAfter(path).data.type == type
+            && getAfter(path).data.applicationId == applicationId
+            && getAfter(path).data.createdAt == request.time
+          );
+      }
+
       function isEmployerByApplicationField() {
         return request.auth != null
           && exists(/databases/$(database)/documents/users/$(request.auth.uid))
@@ -179,7 +326,12 @@ service cloud.firestore {
            get(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.employerId
         && request.resource.data.status == 'pending'
         && request.resource.data.dateApplied == request.time
-        && applicationId == request.resource.data.jobId + '_' + request.auth.uid;
+        && applicationId == request.resource.data.jobId + '_' + request.auth.uid
+        && notificationMatchesIfPresent(
+          request.resource.data.employerId,
+          'new-application__' + applicationId,
+          'new_application'
+        );
 
       // The owning Employer may make one final decision by changing status only.
       allow update: if request.auth != null
@@ -189,12 +341,53 @@ service cloud.firestore {
         && resource.data.jobId is string
         && resource.data.status == 'pending'
         && request.resource.data.status in ['accepted', 'rejected']
+        && (
+          (
+            !('statusUpdatedAt' in resource.data)
+            && !('statusUpdatedAt' in request.resource.data)
+            && !existsAfter(notificationPath(
+              resource.data.studentId,
+              'status__' + request.resource.data.status + '__' + applicationId
+            ))
+          )
+          || (
+            request.resource.data.statusUpdatedAt == request.time
+            && existsAfter(notificationPath(
+              resource.data.studentId,
+              'status__' + request.resource.data.status + '__' + applicationId
+            ))
+            && notificationMatchesIfPresent(
+              resource.data.studentId,
+              'status__' + request.resource.data.status + '__' + applicationId,
+              'application_' + request.resource.data.status
+            )
+          )
+        )
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status'
+          'status',
+          'statusUpdatedAt'
         ]);
     }
 
     match /applications/{applicationId}/messages/{messageId} {
+      function notificationPath(recipientId, notificationId) {
+        return /databases/$(database)/documents/users/$(recipientId)/notifications/$(notificationId);
+      }
+
+      function messageNotificationMatchesIfPresent(recipientId) {
+        let path = notificationPath(
+          recipientId,
+          applicationId + '__' + messageId
+        );
+        return !existsAfter(path)
+          || (
+            getAfter(path).data.type == 'new_message'
+            && getAfter(path).data.applicationId == applicationId
+            && getAfter(path).data.messageId == messageId
+            && getAfter(path).data.createdAt == request.time
+          );
+      }
+
       function validChatParents() {
         return exists(/databases/$(database)/documents/applications/$(applicationId))
           && get(/databases/$(database)/documents/applications/$(applicationId)).data.jobId is string
@@ -263,7 +456,8 @@ service cloud.firestore {
         && request.resource.data.content.size() > 0
         && request.resource.data.content.size() <= 2000
         && request.resource.data.content.matches('.*\\S.*')
-        && request.resource.data.timestamp == request.time;
+        && request.resource.data.timestamp == request.time
+        && messageNotificationMatchesIfPresent(request.resource.data.receiverId);
 
       allow update, delete: if false;
     }

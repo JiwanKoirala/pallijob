@@ -2,14 +2,21 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:pallijob/screens/auth/welcome_screen.dart';
 import 'package:pallijob/screens/employer/employer_applications_screen.dart';
+import 'package:pallijob/screens/employer/employer_profile_screen.dart';
 import 'package:pallijob/screens/employer/manage_jobs_screen.dart';
 import 'package:pallijob/screens/employer/post_job_screen.dart';
-import 'package:pallijob/screens/employer/employer_profile_screen.dart';
+import 'package:pallijob/screens/notifications/in_app_notification_service.dart';
+import 'package:pallijob/screens/notifications/in_app_notifications_screen.dart';
 
 class EmployerDashboardScreen extends StatelessWidget {
-  const EmployerDashboardScreen({super.key, this.applicationsService});
+  const EmployerDashboardScreen({
+    super.key,
+    this.applicationsService,
+    this.notificationsService,
+  });
 
   final EmployerApplicationsService? applicationsService;
+  final InAppNotificationsService? notificationsService;
 
   static const _modules = [
     _DashboardModule(
@@ -26,6 +33,11 @@ class EmployerDashboardScreen extends StatelessWidget {
       title: 'View Applications',
       description: 'Review applications from students',
       icon: Icons.assignment_outlined,
+    ),
+    _DashboardModule(
+      title: 'Notifications',
+      description: 'New applications and student messages',
+      icon: Icons.notifications_none_rounded,
     ),
     _DashboardModule(
       title: 'Messages',
@@ -121,6 +133,16 @@ class EmployerDashboardScreen extends StatelessWidget {
                                   ),
                                 ),
                               ),
+                            'Notifications' => () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => InAppNotificationsScreen(
+                                  role: InAppNotificationRole.employer,
+                                  notificationsService:
+                                      notificationsService ??
+                                      const FirestoreInAppNotificationsService(),
+                                ),
+                              ),
+                            ),
                             'My Profile' => () => Navigator.of(context).push(
                               MaterialPageRoute<void>(
                                 builder: (_) => const EmployerProfileScreen(),

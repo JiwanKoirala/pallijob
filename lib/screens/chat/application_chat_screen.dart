@@ -159,12 +159,29 @@ class FirestoreApplicationChatService implements ApplicationChatService {
     final receiverId = conversation.currentRole == ChatParticipantRole.student
         ? conversation.employerId
         : conversation.studentId;
-    await _messagesReference(applicationId).add({
+    final firestore = FirebaseFirestore.instance;
+    final message = _messagesReference(applicationId).doc();
+    final notification = firestore
+        .collection('users')
+        .doc(receiverId)
+        .collection('notifications')
+        .doc('${applicationId}__${message.id}');
+    final batch = firestore.batch();
+    batch.set(message, {
       'senderId': conversation.currentUserId,
       'receiverId': receiverId,
       'content': text,
       'timestamp': FieldValue.serverTimestamp(),
     });
+    batch.set(notification, {
+      'type': 'new_message',
+      'applicationId': applicationId,
+      'jobTitle': conversation.jobTitle,
+      'messageId': message.id,
+      'createdAt': FieldValue.serverTimestamp(),
+      'readAt': null,
+    });
+    await batch.commit();
   }
 
   CollectionReference<Map<String, dynamic>> _messagesReference(

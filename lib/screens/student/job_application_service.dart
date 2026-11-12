@@ -82,13 +82,30 @@ class FirestoreJobApplicationService implements JobApplicationService {
           'This job is missing its employer information and cannot accept applications.',
         );
       }
+      final jobTitle = job.data()?['title'];
+      if (jobTitle is! String || jobTitle.trim().isEmpty) {
+        throw const JobApplicationException(
+          'This job is missing its title and cannot accept applications.',
+        );
+      }
 
+      final notifications = FirebaseFirestore.instance
+          .collection('users')
+          .doc(employerId)
+          .collection('notifications');
       transaction.set(application, {
         'jobId': jobId,
         'studentId': user.uid,
         'employerId': employerId,
         'status': 'pending',
         'dateApplied': FieldValue.serverTimestamp(),
+      });
+      transaction.set(notifications.doc('new-application__${application.id}'), {
+        'type': 'new_application',
+        'applicationId': application.id,
+        'jobTitle': jobTitle,
+        'createdAt': FieldValue.serverTimestamp(),
+        'readAt': null,
       });
     });
   }
