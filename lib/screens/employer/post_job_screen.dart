@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:pallijob/screens/student/student_job_listings_screen.dart';
 
 class PostJobScreen extends StatefulWidget {
   const PostJobScreen({super.key});
@@ -16,6 +17,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
   final _locationController = TextEditingController();
   final _requirementsController = TextEditingController();
 
+  String? _selectedWorkType;
   bool _isLoading = false;
 
   @override
@@ -108,6 +110,29 @@ class _PostJobScreenState extends State<PostJobScreen> {
                           label: 'Requirements',
                           icon: Icons.checklist_rounded,
                           maxLines: 4,
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          key: const ValueKey('post-job-work-type'),
+                          initialValue: _selectedWorkType,
+                          decoration: const InputDecoration(
+                            labelText: 'Work type',
+                            prefixIcon: Icon(Icons.work_outline_rounded),
+                          ),
+                          items: jobWorkTypes
+                              .map(
+                                (workType) => DropdownMenuItem(
+                                  value: workType,
+                                  child: Text(workType),
+                                ),
+                              )
+                              .toList(growable: false),
+                          validator: (value) =>
+                              value == null ? 'Select a work type.' : null,
+                          onChanged: _isLoading
+                              ? null
+                              : (value) =>
+                                    setState(() => _selectedWorkType = value),
                         ),
                         const SizedBox(height: 24),
                         SizedBox(
@@ -219,6 +244,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
         'description': _descriptionController.text.trim(),
         'location': _locationController.text.trim(),
         'requirements': _requirementsController.text.trim(),
+        'workType': _selectedWorkType!,
         'employerId': user.uid,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -228,6 +254,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
       _descriptionController.clear();
       _locationController.clear();
       _requirementsController.clear();
+      setState(() => _selectedWorkType = null);
       _showMessage('Job posted successfully.', isError: false);
     } on FirebaseException catch (error) {
       if (!mounted) return;

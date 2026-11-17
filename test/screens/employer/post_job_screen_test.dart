@@ -22,6 +22,7 @@ void main() {
     expect(find.text('Description'), findsOneWidget);
     expect(find.text('Location'), findsOneWidget);
     expect(find.text('Requirements'), findsOneWidget);
+    expect(find.text('Work type'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Post Job'));
     await tester.tap(find.text('Post Job'));
@@ -31,5 +32,22 @@ void main() {
     expect(find.text('Description is required.'), findsOneWidget);
     expect(find.text('Location is required.'), findsOneWidget);
     expect(find.text('Requirements is required.'), findsOneWidget);
+    expect(find.text('Select a work type.'), findsOneWidget);
+  });
+
+  testWidgets('employer can select a work type when creating a job', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: PostJobScreen()));
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('post-job-work-type')),
+    );
+    await tester.tap(find.byKey(const ValueKey('post-job-work-type')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Temporary/Contract').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Temporary/Contract'), findsOneWidget);
   });
 }

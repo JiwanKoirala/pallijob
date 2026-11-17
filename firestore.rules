@@ -163,6 +163,14 @@ service cloud.firestore {
     }
 
     match /jobs/{jobId} {
+      function validWorkTypeIfProvided(data) {
+        return !('workType' in data)
+          || data.workType in [
+            'Part-time',
+            'Full-time',
+            'Temporary/Contract'
+          ];
+      }
 
       // Students and employers with a valid profile can view job listings.
       allow read: if request.auth != null
@@ -189,8 +197,10 @@ service cloud.firestore {
           'location',
           'requirements',
           'employerId',
-          'createdAt'
+          'createdAt',
+          'workType'
         ])
+        && validWorkTypeIfProvided(request.resource.data)
         && request.resource.data.employerId ==
            request.auth.uid
         && request.resource.data.createdAt ==
@@ -215,8 +225,10 @@ service cloud.firestore {
           'title',
           'description',
           'location',
-          'requirements'
+          'requirements',
+          'workType'
         ])
+        && validWorkTypeIfProvided(request.resource.data)
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.description is string

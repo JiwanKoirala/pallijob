@@ -25,6 +25,9 @@ class _EditJobScreenState extends State<EditJobScreen> {
     text: widget.job.requirements,
   );
 
+  late String? _selectedWorkType = jobWorkTypes.contains(widget.job.workType)
+      ? widget.job.workType
+      : null;
   bool _isLoading = false;
 
   @override
@@ -117,6 +120,31 @@ class _EditJobScreenState extends State<EditJobScreen> {
                           label: 'Requirements',
                           icon: Icons.checklist_rounded,
                           maxLines: 4,
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String?>(
+                          key: const ValueKey('edit-job-work-type'),
+                          initialValue: _selectedWorkType,
+                          decoration: const InputDecoration(
+                            labelText: 'Work type',
+                            prefixIcon: Icon(Icons.work_outline_rounded),
+                          ),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('Not specified'),
+                            ),
+                            ...jobWorkTypes.map(
+                              (workType) => DropdownMenuItem<String?>(
+                                value: workType,
+                                child: Text(workType),
+                              ),
+                            ),
+                          ],
+                          onChanged: _isLoading
+                              ? null
+                              : (value) =>
+                                    setState(() => _selectedWorkType = value),
                         ),
                         const SizedBox(height: 24),
                         SizedBox(
@@ -236,6 +264,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
         'description': _descriptionController.text.trim(),
         'location': _locationController.text.trim(),
         'requirements': _requirementsController.text.trim(),
+        'workType': _selectedWorkType ?? FieldValue.delete(),
       });
 
       if (!mounted) return;

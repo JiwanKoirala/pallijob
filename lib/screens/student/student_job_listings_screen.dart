@@ -4,6 +4,8 @@ import 'package:pallijob/screens/student/job_application_service.dart';
 import 'package:pallijob/screens/student/job_translation_service.dart';
 import 'package:pallijob/screens/student/student_visa_eligibility_screen.dart';
 
+const jobWorkTypes = <String>['Part-time', 'Full-time', 'Temporary/Contract'];
+
 class StudentJobListingsScreen extends StatefulWidget {
   const StudentJobListingsScreen({
     super.key,
@@ -25,9 +27,11 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
   final _searchController = TextEditingController();
 
   static const _allLocations = 'All Locations';
+  static const _allWorkTypes = 'All Types';
 
   String _searchQuery = '';
   String _selectedLocation = _allLocations;
+  String _selectedWorkType = _allWorkTypes;
 
   @override
   void dispose() {
@@ -99,6 +103,11 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
               final selectedLocation = locations.contains(_selectedLocation)
                   ? _selectedLocation
                   : _allLocations;
+              final selectedWorkType =
+                  _selectedWorkType == _allWorkTypes ||
+                      jobWorkTypes.contains(_selectedWorkType)
+                  ? _selectedWorkType
+                  : _allWorkTypes;
               final normalizedQuery = _searchQuery.trim().toLowerCase();
               final filteredJobs = jobs
                   .where((job) {
@@ -110,7 +119,10 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
                         selectedLocation == _allLocations ||
                         job.location.trim().toLowerCase() ==
                             selectedLocation.toLowerCase();
-                    return matchesSearch && matchesLocation;
+                    final matchesWorkType =
+                        selectedWorkType == _allWorkTypes ||
+                        job.workType == selectedWorkType;
+                    return matchesSearch && matchesLocation && matchesWorkType;
                   })
                   .toList(growable: false);
 
@@ -216,8 +228,48 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
                                 }
                               },
                             ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                              key: const ValueKey('job-work-type-filter'),
+                              initialValue: selectedWorkType,
+                              decoration: InputDecoration(
+                                labelText: 'Work type',
+                                prefixIcon: const Icon(
+                                  Icons.work_outline_rounded,
+                                  color: Color(0xFF64816D),
+                                ),
+                                filled: true,
+                                fillColor: Colors.white,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFFDCE8DF),
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFFDCE8DF),
+                                  ),
+                                ),
+                              ),
+                              items: [_allWorkTypes, ...jobWorkTypes]
+                                  .map(
+                                    (workType) => DropdownMenuItem(
+                                      value: workType,
+                                      child: Text(workType),
+                                    ),
+                                  )
+                                  .toList(growable: false),
+                              onChanged: (workType) {
+                                if (workType != null) {
+                                  setState(() => _selectedWorkType = workType);
+                                }
+                              },
+                            ),
                             if (_searchQuery.trim().isNotEmpty ||
-                                selectedLocation != _allLocations) ...[
+                                selectedLocation != _allLocations ||
+                                selectedWorkType != _allWorkTypes) ...[
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: TextButton.icon(
@@ -233,7 +285,7 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
                               const _ListingsState(
                                 icon: Icons.search_off_rounded,
                                 title: 'No matching jobs',
-                                message: 'Try changing or clearing your search and location filters.',
+                                message: 'Try changing or clearing your search and filters.',
                               ),
                             ],
                           ],
@@ -285,6 +337,7 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
     setState(() {
       _searchQuery = '';
       _selectedLocation = _allLocations;
+      _selectedWorkType = _allWorkTypes;
     });
   }
 
@@ -310,6 +363,7 @@ class StudentJobListing {
     required this.requirements,
     required this.employerId,
     required this.createdAt,
+    this.workType,
   });
 
   factory StudentJobListing.fromDocument(
@@ -325,6 +379,7 @@ class StudentJobListing {
       requirements: _readText(data, 'requirements'),
       employerId: _readText(data, 'employerId'),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      workType: _readOptionalText(data, 'workType'),
     );
   }
 
@@ -335,6 +390,13 @@ class StudentJobListing {
   final String requirements;
   final String employerId;
   final DateTime? createdAt;
+  final String? workType;
+
+  static String? _readOptionalText(Map<String, dynamic> data, String key) {
+    final value = data[key];
+    if (value is! String || value.trim().isEmpty) return null;
+    return value.trim();
+  }
 
   static String _readText(
     Map<String, dynamic> data,
@@ -448,6 +510,11 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 12),
+                      _JobDetailSection(
+                        title: 'Work type',
+                        content: widget.job.workType ?? 'Not specified',
                       ),
                       const SizedBox(height: 24),
                       SegmentedButton<bool>(
@@ -891,6 +958,14 @@ class _JobCard extends StatelessWidget {
                 job.title,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: const Color(0xFF173B27),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                job.workType ?? 'Work type not specified',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF536359),
                   fontWeight: FontWeight.w600,
                 ),
               ),

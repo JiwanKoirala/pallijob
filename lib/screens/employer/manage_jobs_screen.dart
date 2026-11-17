@@ -361,6 +361,14 @@ class _EmployerJobCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
+                  Text(
+                    job.workType ?? 'Work type not specified',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF536359),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
                       const Icon(

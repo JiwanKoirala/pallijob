@@ -130,6 +130,52 @@ try {
   const studentAtomic = environment.authenticatedContext('student-atomic').firestore();
   const signedOut = environment.unauthenticatedContext().firestore();
 
+  const legacyJobWrite = doc(employerA, 'jobs/legacy-job-write');
+  await assertSucceeds(
+    setDoc(legacyJobWrite, {
+      title: 'Legacy listing',
+      description: 'Created without the optional work type.',
+      location: 'Seoul',
+      requirements: 'Experience preferred.',
+      employerId: 'employer-a',
+      createdAt: serverTimestamp(),
+    }),
+  );
+  const typedJobWrite = doc(employerA, 'jobs/typed-job-write');
+  await assertSucceeds(
+    setDoc(typedJobWrite, {
+      title: 'Typed listing',
+      description: 'Created with a structured work type.',
+      location: 'Seoul',
+      requirements: 'Experience preferred.',
+      employerId: 'employer-a',
+      createdAt: serverTimestamp(),
+      workType: 'Part-time',
+    }),
+  );
+  await assertSucceeds(
+    updateDoc(typedJobWrite, { workType: 'Temporary/Contract' }),
+  );
+  await assertFails(
+    updateDoc(typedJobWrite, { workType: 'Seasonal/Unlisted' }),
+  );
+  await assertFails(
+    updateDoc(doc(employerB, 'jobs/typed-job-write'), {
+      workType: 'Full-time',
+    }),
+  );
+  await assertFails(
+    setDoc(doc(employerA, 'jobs/forged-work-type'), {
+      title: 'Invalid work type',
+      description: 'Must use a supported value.',
+      location: 'Seoul',
+      requirements: 'Experience preferred.',
+      employerId: 'employer-a',
+      createdAt: serverTimestamp(),
+      workType: 'Seasonal/Unlisted',
+    }),
+  );
+
   const employerAApplications = await assertSucceeds(
     getDocs(
       query(
@@ -933,6 +979,7 @@ try {
   );
 
   console.log('PASS Employer A can list only applications owned by Employer A');
+  console.log('PASS job work types are optional for legacy writes and validated for authorized employer writes');
   console.log('PASS Employer B cannot read Employer A applications');
   console.log('PASS unrelated students and signed-out users cannot list others’ applications');
   console.log('PASS students retain own-application reads');

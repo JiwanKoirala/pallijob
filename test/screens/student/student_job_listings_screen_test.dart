@@ -14,6 +14,7 @@ const job = StudentJobListing(
   requirements: 'Friendly and reliable.',
   employerId: 'employer-1',
   createdAt: null,
+  workType: 'Part-time',
 );
 const secondJob = StudentJobListing(
   id: 'job-2',
@@ -23,6 +24,7 @@ const secondJob = StudentJobListing(
   requirements: 'Helpful and organized.',
   employerId: 'employer-2',
   createdAt: null,
+  workType: 'Full-time',
 );
 const thirdJob = StudentJobListing(
   id: 'job-3',
@@ -77,6 +79,7 @@ void main() {
 
     expect(find.text('Cafe Assistant'), findsOneWidget);
     expect(find.text('Seoul'), findsOneWidget);
+    expect(find.text('Part-time'), findsOneWidget);
     expect(
       find.text('Help prepare drinks and serve customers.'),
       findsOneWidget,
@@ -88,6 +91,7 @@ void main() {
     expect(find.text('Job Details'), findsOneWidget);
     expect(find.text('Friendly and reliable.'), findsOneWidget);
     expect(find.text('employer-1'), findsOneWidget);
+    expect(find.text('Work type'), findsOneWidget);
     expect(find.text('Not available'), findsOneWidget);
   });
 
@@ -160,6 +164,66 @@ void main() {
     expect(find.text('Cafe Assistant'), findsNothing);
   });
 
+  testWidgets('filters jobs by selected work type', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StudentJobListingsScreen(jobsStream: Stream.value(testJobs)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('job-work-type-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Full-time').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Shop Assistant'), findsOneWidget);
+    expect(find.text('Cafe Assistant'), findsNothing);
+    expect(find.text('Delivery Driver'), findsNothing);
+  });
+
+  testWidgets('legacy jobs remain visible under All Types', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StudentJobListingsScreen(jobsStream: Stream.value([thirdJob])),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Delivery Driver'));
+
+    expect(find.text('Delivery Driver'), findsOneWidget);
+    expect(find.text('Work type not specified'), findsOneWidget);
+  });
+
+  testWidgets('combines work type with search and location filters', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StudentJobListingsScreen(jobsStream: Stream.value(testJobs)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('job-search-field')),
+      'assistant',
+    );
+    await tester.tap(find.byKey(const ValueKey('job-location-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Busan').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('job-work-type-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Full-time').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Shop Assistant'), findsOneWidget);
+    expect(find.text('Cafe Assistant'), findsNothing);
+    expect(find.text('Delivery Driver'), findsNothing);
+  });
+
   testWidgets('combines search and location filters', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -191,6 +255,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const ValueKey('job-work-type-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Part-time').last);
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('job-search-field')),
       'no match',
@@ -203,6 +271,7 @@ void main() {
 
     expect(find.text('No matching jobs'), findsNothing);
     expect(find.text('All Locations'), findsOneWidget);
+    expect(find.text('All Types'), findsOneWidget);
     expect(find.byKey(const ValueKey('clear-job-filters')), findsNothing);
 
     await tester.enterText(
