@@ -233,6 +233,7 @@ class _StudentApplicationsScreenState extends State<StudentApplicationsScreen> {
                       MaterialPageRoute<void>(
                         builder: (_) => ApplicationChatScreen(
                           applicationId: application.id,
+                          uiRole: ChatParticipantRole.student,
                           chatService:
                               widget.chatService ??
                               const FirestoreApplicationChatService(),

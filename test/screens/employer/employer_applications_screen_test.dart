@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pallijob/screens/chat/application_chat_screen.dart';
 import 'package:pallijob/screens/employer/employer_applications_screen.dart';
 import 'package:pallijob/screens/employer/employer_dashboard_screen.dart';
 
@@ -31,7 +32,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Loading applications'), findsOneWidget);
+    expect(find.text('지원서를 불러오는 중'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
@@ -40,7 +41,7 @@ void main() {
   ) async {
     await _pumpApplications(tester, const []);
 
-    expect(find.text('No applications received yet'), findsOneWidget);
+    expect(find.text('아직 지원서가 없습니다'), findsOneWidget);
   });
 
   testWidgets('shows job title, applicant ID, status, and date', (
@@ -49,10 +50,10 @@ void main() {
     await _pumpApplications(tester, [employerApplication]);
 
     expect(find.text('Cafe Assistant'), findsOneWidget);
-    expect(find.text('Applicant ID'), findsOneWidget);
+    expect(find.text('지원자 ID'), findsOneWidget);
     expect(find.text('student-1'), findsOneWidget);
-    expect(find.text('Pending'), findsOneWidget);
-    expect(find.textContaining('Nov'), findsOneWidget);
+    expect(find.text('검토 중'), findsOneWidget);
+    expect(find.textContaining('2026년 11월 1일'), findsOneWidget);
     expect(find.text('Chat'), findsNothing);
   });
 
@@ -75,7 +76,18 @@ void main() {
           applicationsService: _FakeEmployerApplicationsService(
             Future.value([application]),
           ),
-          chatService: FakeApplicationChatService(),
+          chatService: FakeApplicationChatService(
+            conversation: Future.value(
+              const ChatConversation(
+                applicationId: 'job-1_student-1',
+                jobTitle: 'Cafe Assistant',
+                studentId: 'student-1',
+                employerId: 'employer-1',
+                currentUserId: 'employer-1',
+                currentRole: ChatParticipantRole.employer,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -86,8 +98,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('No messages yet'), findsOneWidget);
-    expect(find.text('Write a message'), findsOneWidget);
+    expect(find.text('메시지가 없습니다'), findsOneWidget);
+    expect(find.text('메시지를 입력하세요'), findsOneWidget);
   });
 
   testWidgets('accepts a pending application after confirmation', (
@@ -105,7 +117,7 @@ void main() {
       find.byKey(const ValueKey('accept-application-job-1_student-1')),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Accept application?'), findsOneWidget);
+    expect(find.text('수락 지원서'), findsOneWidget);
     await tester.tap(
       find.byKey(const ValueKey('confirm-decision-job-1_student-1')),
     );
@@ -114,9 +126,12 @@ void main() {
     expect(service.decisions, [
       ('job-1_student-1', EmployerApplicationDecision.accepted),
     ]);
-    expect(find.text('Accepted'), findsOneWidget);
-    expect(find.text('Accept'), findsNothing);
-    expect(find.text('Reject'), findsNothing);
+    expect(find.text('수락'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('accept-application-job-1_student-1')),
+      findsNothing,
+    );
+    expect(find.text('거절'), findsNothing);
   });
 
   testWidgets('rejects a pending application after confirmation', (
@@ -134,7 +149,7 @@ void main() {
       find.byKey(const ValueKey('reject-application-job-1_student-1')),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Reject application?'), findsOneWidget);
+    expect(find.text('거절 지원서'), findsOneWidget);
     await tester.tap(
       find.byKey(const ValueKey('confirm-decision-job-1_student-1')),
     );
@@ -143,9 +158,8 @@ void main() {
     expect(service.decisions, [
       ('job-1_student-1', EmployerApplicationDecision.rejected),
     ]);
-    expect(find.text('Rejected'), findsOneWidget);
-    expect(find.text('Accept'), findsNothing);
-    expect(find.text('Reject'), findsNothing);
+    expect(find.text('거절'), findsOneWidget);
+    expect(find.text('수락'), findsNothing);
   });
 
   testWidgets('cancelling confirmation makes no decision', (tester) async {
@@ -164,7 +178,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(service.decisions, isEmpty);
-    expect(find.text('Pending'), findsOneWidget);
+    expect(find.text('검토 중'), findsOneWidget);
   });
 
   testWidgets('offers decisions only for pending applications', (tester) async {
@@ -188,8 +202,8 @@ void main() {
     );
     await _pumpApplications(tester, [acceptedApplication, rejectedApplication]);
 
-    expect(find.text('Accepted'), findsOneWidget);
-    expect(find.text('Rejected'), findsOneWidget);
+    expect(find.text('수락'), findsOneWidget);
+    expect(find.text('거절'), findsOneWidget);
     expect(find.byType(OutlinedButton), findsNothing);
     expect(find.byType(FilledButton), findsNothing);
   });
@@ -213,7 +227,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Saving decision...'), findsOneWidget);
+    expect(find.text('처리 중…'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(service.decisions, hasLength(1));
     expect(
@@ -252,7 +266,7 @@ void main() {
     await _chooseAndConfirm(tester, 'accept');
 
     expect(
-      find.textContaining('Firestore denied this decision'),
+      find.textContaining('처리 권한이 없습니다'),
       findsOneWidget,
     );
   });
@@ -267,7 +281,7 @@ void main() {
     await _chooseAndConfirm(tester, 'reject');
 
     expect(
-      find.textContaining('Could not update the application'),
+      find.textContaining('지원서를 처리하지 못했습니다'),
       findsOneWidget,
     );
   });
@@ -278,7 +292,7 @@ void main() {
     const application = EmployerApplication(
       id: 'job-1_student-1',
       jobId: 'job-1',
-      jobTitle: 'Job no longer available',
+      jobTitle: '더 이상 이용할 수 없는 공고',
       applicantId: 'student-1',
       status: 'pending',
       dateApplied: null,
@@ -286,14 +300,14 @@ void main() {
     );
     await _pumpApplications(tester, const [application]);
 
-    expect(find.text('Job no longer available'), findsOneWidget);
+    expect(find.text('더 이상 이용할 수 없는 공고'), findsOneWidget);
     expect(
-      find.text('This job listing is no longer available.'),
+      find.text('이 채용 공고는 더 이상 이용할 수 없습니다.'),
       findsOneWidget,
     );
     expect(find.text('student-1'), findsOneWidget);
-    expect(find.text('Pending'), findsOneWidget);
-    expect(find.text('Date unavailable'), findsOneWidget);
+    expect(find.text('검토 중'), findsOneWidget);
+    expect(find.text('날짜 정보 없음'), findsOneWidget);
   });
 
   testWidgets('shows permission-denied guidance and retry', (tester) async {
@@ -317,11 +331,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Could not load applications'), findsOneWidget);
-    expect(find.textContaining('do not have permission'), findsOneWidget);
-    await tester.tap(find.text('Retry'));
+    expect(find.text('지원서를 불러오지 못했습니다'), findsOneWidget);
+    expect(find.textContaining('지원서를 확인할 권한'), findsOneWidget);
+    await tester.tap(find.text('다시 시도'));
     await tester.pumpAndSettle();
-    expect(find.text('No applications received yet'), findsOneWidget);
+    expect(find.text('아직 지원서가 없습니다'), findsOneWidget);
     expect(service.loadCalls, 2);
   });
 
@@ -329,12 +343,12 @@ void main() {
     await _pumpError(
       tester,
       const EmployerApplicationsException(
-        'Sign in with an employer account to view applications.',
+        '지원서를 확인하려면 고용주 계정으로 로그인해 주세요.',
       ),
     );
 
     expect(
-      find.text('Sign in with an employer account to view applications.'),
+      find.text('지원서를 확인하려면 고용주 계정으로 로그인해 주세요.'),
       findsOneWidget,
     );
   });
@@ -343,12 +357,12 @@ void main() {
     await _pumpError(
       tester,
       const EmployerApplicationsException(
-        'Only employer accounts can view received applications.',
+        '고용주 계정만 접수된 지원서를 확인할 수 있습니다.',
       ),
     );
 
     expect(
-      find.text('Only employer accounts can view received applications.'),
+      find.text('고용주 계정만 접수된 지원서를 확인할 수 있습니다.'),
       findsOneWidget,
     );
   });
@@ -366,10 +380,10 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('View Applications'));
+    await tester.tap(find.text('지원서 확인'));
     await tester.pumpAndSettle();
 
-    expect(find.text('No applications received yet'), findsOneWidget);
+    expect(find.text('아직 지원서가 없습니다'), findsOneWidget);
   });
 }
 

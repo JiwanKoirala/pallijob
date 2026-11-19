@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:pallijob/l10n/role_aware_strings.dart';
 import 'package:pallijob/screens/chat/application_chat_screen.dart';
 import 'package:pallijob/screens/employer/employer_applications_screen.dart';
 import 'package:pallijob/screens/notifications/in_app_notification_service.dart';
@@ -33,6 +34,10 @@ class _InAppNotificationsScreenState extends State<InAppNotificationsScreen> {
   final Set<String> _updatingIds = {};
   bool _isMarkingAll = false;
 
+  RoleAwareStrings get _notificationStrings => RoleAwareStrings(
+    isEmployer: widget.role == InAppNotificationRole.employer,
+  );
+
   @override
   void initState() {
     super.initState();
@@ -41,11 +46,12 @@ class _InAppNotificationsScreenState extends State<InAppNotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = _notificationStrings;
     return Scaffold(
       backgroundColor: const Color(0xFFF8FBF8),
       appBar: AppBar(
-        title: const Text(
-          'Notifications',
+        title: Text(
+          strings.text(english: 'Notifications', korean: '알림'),
           style: TextStyle(
             color: Color(0xFF173B27),
             fontWeight: FontWeight.w800,
@@ -55,7 +61,10 @@ class _InAppNotificationsScreenState extends State<InAppNotificationsScreen> {
         surfaceTintColor: Colors.transparent,
         actions: [
           IconButton(
-            tooltip: 'Refresh notifications',
+            tooltip: strings.text(
+              english: 'Refresh notifications',
+              korean: '알림 새로고침',
+            ),
             onPressed: _refresh,
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -66,20 +75,29 @@ class _InAppNotificationsScreenState extends State<InAppNotificationsScreen> {
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return _NotificationsState(
-              title: 'Could not load notifications',
-              message: _errorMessage(snapshot.error),
+              title: strings.text(
+                english: 'Could not load notifications',
+                korean: '알림을 불러오지 못했습니다',
+              ),
+              message: _errorMessage(snapshot.error, strings),
               icon: Icons.cloud_off_outlined,
               action: TextButton(
                 onPressed: _refresh,
-                child: const Text('Retry'),
+                child: Text(strings.text(english: 'Retry', korean: '다시 시도')),
               ),
             );
           }
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const _NotificationsState(
+            return _NotificationsState(
               loading: true,
-              title: 'Loading notifications',
-              message: 'Please wait while we load your notifications.',
+              title: strings.text(
+                english: 'Loading notifications',
+                korean: '알림을 불러오는 중',
+              ),
+              message: strings.text(
+                english: 'Please wait while we load your notifications.',
+                korean: '알림을 불러오고 있습니다.',
+              ),
             );
           }
 
@@ -87,12 +105,19 @@ class _InAppNotificationsScreenState extends State<InAppNotificationsScreen> {
           _loadedNotifications = List<InAppNotification>.of(notifications);
           if (notifications.isEmpty) {
             return _NotificationsState(
-              title: 'You’re all caught up',
-              message: 'New application and message updates will appear here.',
+              title: strings.text(
+                english: 'You’re all caught up',
+                korean: '새로운 알림이 없습니다',
+              ),
+              message: strings.text(
+                english:
+                    'New application and message updates will appear here.',
+                korean: '새 지원서와 메시지 알림이 여기에 표시됩니다.',
+              ),
               icon: Icons.notifications_none_rounded,
               action: TextButton(
                 onPressed: _refresh,
-                child: const Text('Refresh'),
+                child: Text(strings.text(english: 'Refresh', korean: '새로고침')),
               ),
             );
           }
@@ -114,8 +139,18 @@ class _InAppNotificationsScreenState extends State<InAppNotificationsScreen> {
                           ? null
                           : () => _markAllAsRead(unread),
                       child: _isMarkingAll
-                          ? const Text('Marking as read…')
-                          : Text('Mark all as read (${unread.length})'),
+                          ? Text(
+                              strings.text(
+                                english: 'Marking as read…',
+                                korean: '읽음으로 표시 중…',
+                              ),
+                            )
+                          : Text(
+                              strings.text(
+                                english: 'Mark all as read (${unread.length})',
+                                korean: '모두 읽음으로 표시 (${unread.length})',
+                              ),
+                            ),
                     ),
                   );
                 }
@@ -124,6 +159,7 @@ class _InAppNotificationsScreenState extends State<InAppNotificationsScreen> {
                 return _NotificationCard(
                   notification: notification,
                   role: widget.role,
+                  strings: strings,
                   isUpdating: _updatingIds.contains(notification.id),
                   onTap: () => _openNotification(notification),
                 );
@@ -219,6 +255,9 @@ class _InAppNotificationsScreenState extends State<InAppNotificationsScreen> {
     if (notification.type == InAppNotificationType.newMessage) {
       return ApplicationChatScreen(
         applicationId: notification.applicationId,
+        uiRole: widget.role == InAppNotificationRole.student
+            ? ChatParticipantRole.student
+            : ChatParticipantRole.employer,
         chatService:
             widget.chatService ?? const FirestoreApplicationChatService(),
       );
@@ -237,7 +276,9 @@ class _InAppNotificationsScreenState extends State<InAppNotificationsScreen> {
   void _showReadError(Object error) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(_errorMessage(error))));
+      ..showSnackBar(
+        SnackBar(content: Text(_errorMessage(error, _notificationStrings))),
+      );
   }
 }
 
@@ -245,23 +286,23 @@ class _NotificationCard extends StatelessWidget {
   const _NotificationCard({
     required this.notification,
     required this.role,
+    required this.strings,
     required this.isUpdating,
     required this.onTap,
   });
 
   final InAppNotification notification;
   final InAppNotificationRole role;
+  final RoleAwareStrings strings;
   final bool isUpdating;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final title = _notificationTitle(notification.type, role);
-    final time = MaterialLocalizations.of(context)
-        .formatFullDate(notification.createdAt.toLocal());
-    final timeOfDay = MaterialLocalizations.of(
-      context,
-    ).formatTimeOfDay(TimeOfDay.fromDateTime(notification.createdAt.toLocal()));
+    final title = _notificationTitle(notification.type, role, strings);
+    final localTime = notification.createdAt.toLocal();
+    final time = strings.fullDate(context, localTime);
+    final timeOfDay = strings.timeOfDay(context, localTime);
 
     return Card(
       color: Colors.white,
@@ -305,12 +346,23 @@ class _NotificationCard extends StatelessWidget {
                                 ),
                           ),
                         ),
-                        if (!notification.isRead) const _UnreadIndicator(),
+                        if (!notification.isRead)
+                          _UnreadIndicator(
+                            label: strings.text(
+                              english: 'Unread',
+                              korean: '읽지 않음',
+                            ),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      '${notification.jobTitle} · Application ${notification.applicationId}',
+                      strings.text(
+                        english:
+                            '${notification.jobTitle} · Application ${notification.applicationId}',
+                        korean:
+                            '${notification.jobTitle} · 지원서 ${notification.applicationId}',
+                      ),
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: const Color(0xFF647369)),
                     ),
@@ -340,7 +392,9 @@ class _NotificationCard extends StatelessWidget {
 }
 
 class _UnreadIndicator extends StatelessWidget {
-  const _UnreadIndicator();
+  const _UnreadIndicator({required this.label});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -350,8 +404,8 @@ class _UnreadIndicator extends StatelessWidget {
         color: const Color(0xFFEAF4ED),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: const Text(
-        'Unread',
+      child: Text(
+        label,
         style: TextStyle(
           color: Color(0xFF247545),
           fontSize: 11,
@@ -411,15 +465,31 @@ class _NotificationsState extends StatelessWidget {
 String _notificationTitle(
   InAppNotificationType type,
   InAppNotificationRole role,
+  RoleAwareStrings strings,
 ) {
   return switch (type) {
-    InAppNotificationType.newApplication => 'New job application',
-    InAppNotificationType.applicationAccepted => 'Application accepted',
-    InAppNotificationType.applicationRejected => 'Application rejected',
+    InAppNotificationType.newApplication => strings.text(
+      english: 'New job application',
+      korean: '새로운 채용 지원서',
+    ),
+    InAppNotificationType.applicationAccepted => strings.text(
+      english: 'Application accepted',
+      korean: '지원서가 수락되었습니다',
+    ),
+    InAppNotificationType.applicationRejected => strings.text(
+      english: 'Application rejected',
+      korean: '지원서가 거절되었습니다',
+    ),
     InAppNotificationType.newMessage =>
       role == InAppNotificationRole.student
-          ? 'New message from employer'
-          : 'New message from student',
+          ? strings.text(
+              english: 'New message from employer',
+              korean: '고용주에게 새 메시지가 왔습니다',
+            )
+          : strings.text(
+              english: 'New message from student',
+              korean: '학생에게 새 메시지가 왔습니다',
+            ),
   };
 }
 
@@ -432,13 +502,24 @@ IconData _notificationIcon(InAppNotificationType type) {
   };
 }
 
-String _errorMessage(Object? error) {
+String _errorMessage(Object? error, RoleAwareStrings strings) {
   if (error is FirebaseException && error.code == 'permission-denied') {
-    return 'You do not have permission to access these notifications.';
+    return strings.text(
+      english: 'You do not have permission to access these notifications.',
+      korean: '알림을 확인할 권한이 없습니다.',
+    );
   }
-  if (error is InAppNotificationsException) return error.message;
+  if (error is InAppNotificationsException) {
+    return strings.text(english: error.message, korean: error.koreanMessage);
+  }
   if (error is FirebaseException) {
-    return 'A Firebase error occurred. Please check your connection and try again.';
+    return strings.text(
+      english: 'A Firebase error occurred. Please check your connection and try again.',
+      korean: 'Firebase 오류가 발생했습니다. 네트워크를 확인한 후 다시 시도해 주세요.',
+    );
   }
-  return 'Could not load notifications. Please try again.';
+  return strings.text(
+    english: 'Could not load notifications. Please try again.',
+    korean: '알림을 불러오지 못했습니다. 다시 시도해 주세요.',
+  );
 }

@@ -24,12 +24,13 @@ void main() {
       const MaterialApp(home: AuthScreen(role: 'Employer')),
     );
 
-    expect(find.text('Business name'), findsOneWidget);
-    expect(find.text('Employer full name'), findsOneWidget);
-    expect(find.text('Email'), findsOneWidget);
-    expect(find.text('Password'), findsOneWidget);
-    expect(find.text('Confirm password'), findsOneWidget);
-    expect(find.text('Full name'), findsNothing);
+    expect(find.text('회사명'), findsOneWidget);
+    expect(find.text('담당자 성함'), findsOneWidget);
+    expect(find.text('이메일'), findsOneWidget);
+    expect(find.text('비밀번호'), findsOneWidget);
+    expect(find.text('비밀번호 확인'), findsOneWidget);
+    expect(find.text('성함'), findsNothing);
+    expect(find.text('고용주 계정 만들기'), findsOneWidget);
   });
 
   testWidgets('login mode only asks for email and password', (tester) async {
@@ -51,14 +52,30 @@ void main() {
       const MaterialApp(home: AuthScreen(role: 'Employer')),
     );
 
-    await tester.ensureVisible(find.text('Create account'));
-    await tester.tap(find.text('Create account'));
+    await tester.ensureVisible(find.text('계정 만들기'));
+    await tester.tap(find.text('계정 만들기'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Business name is required.'), findsOneWidget);
-    expect(find.text('Employer full name is required.'), findsOneWidget);
-    expect(find.text('Email is required.'), findsOneWidget);
-    expect(find.text('Password is required.'), findsOneWidget);
-    expect(find.text('Confirm password is required.'), findsOneWidget);
+    expect(find.text('회사명은 필수 입력 항목입니다.'), findsOneWidget);
+    expect(find.text('담당자 성함은 필수 입력 항목입니다.'), findsOneWidget);
+    expect(find.text('이메일은 필수 입력 항목입니다.'), findsOneWidget);
+    expect(find.text('비밀번호는 필수 입력 항목입니다.'), findsOneWidget);
+    expect(find.text('비밀번호 확인은 필수 입력 항목입니다.'), findsOneWidget);
+  });
+
+  testWidgets('employer login mode is Korean while student auth stays English', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: AuthScreen(role: 'Employer')),
+    );
+
+    await tester.tap(find.text('로그인'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('다시 오신 것을 환영합니다'), findsOneWidget);
+    expect(find.text('이메일'), findsOneWidget);
+    expect(find.text('비밀번호'), findsOneWidget);
+    expect(find.text('로그인'), findsNWidgets(2));
   });
 }

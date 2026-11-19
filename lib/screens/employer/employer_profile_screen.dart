@@ -32,9 +32,7 @@ class FirestoreEmployerProfileService implements EmployerProfileService {
   Future<EmployerProfile> loadProfile() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      throw const EmployerProfileException(
-        'Sign in with an employer account to view your profile.',
-      );
+      throw const EmployerProfileException('프로필을 확인하려면 고용주 계정으로 로그인해 주세요.');
     }
 
     final profile = await FirebaseFirestore.instance
@@ -42,14 +40,10 @@ class FirestoreEmployerProfileService implements EmployerProfileService {
         .doc(user.uid)
         .get();
     if (profile.data()?['role'] != 'employer') {
-      throw const EmployerProfileException(
-        'Only employer accounts can view this profile.',
-      );
+      throw const EmployerProfileException('고용주 계정만 이 프로필을 확인할 수 있습니다.');
     }
     if (FirebaseAuth.instance.currentUser?.uid != user.uid) {
-      throw const EmployerProfileException(
-        'Your session changed. Please sign in again.',
-      );
+      throw const EmployerProfileException('로그인 세션이 변경되었습니다. 다시 로그인해 주세요.');
     }
 
     final data = profile.data()!;
@@ -70,9 +64,7 @@ class FirestoreEmployerProfileService implements EmployerProfileService {
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      throw const EmployerProfileException(
-        'Sign in with an employer account to save your profile.',
-      );
+      throw const EmployerProfileException('프로필을 저장하려면 고용주 계정으로 로그인해 주세요.');
     }
 
     final profileReference = FirebaseFirestore.instance
@@ -80,14 +72,10 @@ class FirestoreEmployerProfileService implements EmployerProfileService {
         .doc(user.uid);
     final profile = await profileReference.get();
     if (profile.data()?['role'] != 'employer') {
-      throw const EmployerProfileException(
-        'Only employer accounts can edit this profile.',
-      );
+      throw const EmployerProfileException('고용주 계정만 이 프로필을 수정할 수 있습니다.');
     }
     if (FirebaseAuth.instance.currentUser?.uid != user.uid) {
-      throw const EmployerProfileException(
-        'Your session changed. Please sign in again.',
-      );
+      throw const EmployerProfileException('로그인 세션이 변경되었습니다. 다시 로그인해 주세요.');
     }
 
     await profileReference.update({
@@ -201,9 +189,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
       });
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully.')),
-        );
+        ..showSnackBar(const SnackBar(content: Text('프로필이 수정되었습니다.')));
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -219,7 +205,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
       backgroundColor: const Color(0xFFF8FBF8),
       appBar: AppBar(
         title: const Text(
-          'My Profile',
+          '내 프로필',
           style: TextStyle(
             color: Color(0xFF173B27),
             fontWeight: FontWeight.w800,
@@ -234,17 +220,17 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
         child: _isLoading
             ? const _EmployerProfileState(
                 loading: true,
-                title: 'Loading profile',
-                message: 'Please wait while we load your employer profile.',
+                title: '프로필을 불러오는 중',
+                message: '고용주 프로필을 불러오고 있습니다.',
               )
             : _loadError != null
             ? _EmployerProfileState(
                 icon: Icons.cloud_off_outlined,
-                title: 'Could not load profile',
+                title: '프로필을 불러오지 못했습니다',
                 message: _loadError!,
                 action: TextButton(
                   onPressed: _loadProfile,
-                  child: const Text('Retry'),
+                  child: const Text('다시 시도'),
                 ),
               )
             : _buildProfile(),
@@ -273,7 +259,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Your employer details',
+                      '고용주 정보',
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(
                             color: const Color(0xFF173B27),
@@ -282,7 +268,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Review your account information and keep your company profile up to date.',
+                      '계정 정보를 확인하고 회사 프로필을 최신 상태로 관리해 주세요.',
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: const Color(0xFF647369),
                         height: 1.45,
@@ -292,22 +278,22 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                     _readOnlyCard(
                       context,
                       icon: Icons.person_outline_rounded,
-                      label: 'Full name',
-                      value: profile.fullName ?? 'Not provided',
+                      label: '이름',
+                      value: profile.fullName ?? '입력되지 않음',
                     ),
                     const SizedBox(height: 10),
                     _readOnlyCard(
                       context,
                       icon: Icons.email_outlined,
-                      label: 'Email',
-                      value: profile.email ?? 'Not provided',
+                      label: '이메일',
+                      value: profile.email ?? '입력되지 않음',
                     ),
                     const SizedBox(height: 10),
                     _readOnlyCard(
                       context,
                       icon: Icons.verified_user_outlined,
-                      label: 'Account type',
-                      value: 'Employer',
+                      label: '계정 유형',
+                      value: '고용주',
                     ),
                     const SizedBox(height: 22),
                     TextFormField(
@@ -317,12 +303,12 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                       textCapitalization: TextCapitalization.words,
                       validator: (value) =>
                           value == null || value.trim().isEmpty
-                          ? 'Company name is required.'
+                          ? '회사명을 입력해 주세요.'
                           : null,
                       onChanged: (_) => _clearSaveError(),
                       decoration: _inputDecoration(
-                        label: 'Company name',
-                        hint: 'Enter your company name',
+                        label: '회사명',
+                        hint: '회사명을 입력해 주세요',
                         icon: Icons.business_outlined,
                       ),
                     ),
@@ -337,14 +323,14 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                       maxLines: 3,
                       validator: (value) =>
                           value == null || value.trim().isEmpty
-                          ? 'Contact information is required.'
+                          ? '연락처를 입력해 주세요.'
                           : null,
                       onChanged: (_) => _clearSaveError(),
                       decoration: _inputDecoration(
-                        label: 'Contact information',
-                        hint: 'Enter a contact email or phone number',
+                        label: '연락처',
+                        hint: '이메일 주소 또는 전화번호를 입력해 주세요',
                         icon: Icons.contact_mail_outlined,
-                        helperText: 'Provide a way for applicants to contact your company.',
+                        helperText: '지원자가 회사에 연락할 수 있는 방법을 입력해 주세요.',
                       ),
                     ),
                     if (_saveError != null) ...[
@@ -376,7 +362,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                                 color: Colors.white,
                               ),
                             )
-                          : const Text('Save Changes'),
+                          : const Text('변경 사항 저장'),
                     ),
                   ],
                 ),
@@ -471,12 +457,12 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
     if (error is EmployerProfileException) return error.message;
     if (error is FirebaseException && error.code == 'permission-denied') {
       return loading
-          ? 'Firestore denied access to this profile. Confirm you are signed in as its owner.'
-          : 'Firestore denied this update. Check that the rules allow employer profile fields.';
+          ? '프로필 조회 권한이 없습니다. 프로필 소유자 계정으로 로그인했는지 확인해 주세요.'
+          : '프로필 수정 권한이 없습니다. Firestore 규칙에서 고용주 프로필 수정을 허용하는지 확인해 주세요.';
     }
     return loading
-        ? 'We could not load your profile. Check your connection and try again.'
-        : 'We could not save your profile. Check your connection and try again.';
+        ? '프로필을 불러오지 못했습니다. 네트워크를 확인한 후 다시 시도해 주세요.'
+        : '프로필을 저장하지 못했습니다. 네트워크를 확인한 후 다시 시도해 주세요.';
   }
 }
 

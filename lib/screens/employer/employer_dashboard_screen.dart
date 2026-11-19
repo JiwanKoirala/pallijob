@@ -20,33 +20,39 @@ class EmployerDashboardScreen extends StatelessWidget {
 
   static const _modules = [
     _DashboardModule(
-      title: 'Post Job',
-      description: 'Create a new job listing',
+      action: _DashboardAction.postJob,
+      title: '채용 공고 등록',
+      description: '새로운 채용 공고를 작성합니다',
       icon: Icons.add_circle_outline_rounded,
     ),
     _DashboardModule(
-      title: 'Manage Jobs',
-      description: 'Review and update your job listings',
+      action: _DashboardAction.manageJobs,
+      title: '채용 공고 관리',
+      description: '등록한 채용 공고를 확인하고 수정합니다',
       icon: Icons.work_outline_rounded,
     ),
     _DashboardModule(
-      title: 'View Applications',
-      description: 'Review applications from students',
+      action: _DashboardAction.viewApplications,
+      title: '지원서 확인',
+      description: '학생들의 지원 내역을 확인합니다',
       icon: Icons.assignment_outlined,
     ),
     _DashboardModule(
-      title: 'Notifications',
-      description: 'New applications and student messages',
+      action: _DashboardAction.notifications,
+      title: '알림',
+      description: '새 지원서와 학생 메시지를 확인합니다',
       icon: Icons.notifications_none_rounded,
     ),
     _DashboardModule(
-      title: 'Messages',
-      description: 'Your conversations will appear here',
+      action: _DashboardAction.messages,
+      title: '메시지',
+      description: '대화 기능은 준비 중입니다',
       icon: Icons.chat_bubble_outline_rounded,
     ),
     _DashboardModule(
-      title: 'My Profile',
-      description: 'Manage your employer profile',
+      action: _DashboardAction.myProfile,
+      title: '내 프로필',
+      description: '고용주 프로필을 관리합니다',
       icon: Icons.person_outline_rounded,
     ),
   ];
@@ -68,7 +74,7 @@ class EmployerDashboardScreen extends StatelessWidget {
         surfaceTintColor: Colors.transparent,
         actions: [
           IconButton(
-            tooltip: 'Log out',
+            tooltip: '로그아웃',
             onPressed: () => _signOut(context),
             icon: const Icon(Icons.logout_rounded),
           ),
@@ -94,7 +100,7 @@ class EmployerDashboardScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        'Welcome, Employer!',
+                        '고용주님, 환영합니다!',
                         style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(
                               color: const Color(0xFF173B27),
@@ -104,7 +110,7 @@ class EmployerDashboardScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'What would you like to do today?',
+                        '오늘 어떤 업무를 진행하시겠어요?',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: const Color(0xFF647369),
                           height: 1.45,
@@ -114,18 +120,20 @@ class EmployerDashboardScreen extends StatelessWidget {
                       for (final module in _modules) ...[
                         _ModuleCard(
                           module: module,
-                          onTap: switch (module.title) {
-                            'Post Job' => () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const PostJobScreen(),
+                          onTap: switch (module.action) {
+                            _DashboardAction.postJob =>
+                              () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => const PostJobScreen(),
+                                ),
                               ),
-                            ),
-                            'Manage Jobs' => () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const ManageJobsScreen(),
+                            _DashboardAction.manageJobs =>
+                              () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => const ManageJobsScreen(),
+                                ),
                               ),
-                            ),
-                            'View Applications' =>
+                            _DashboardAction.viewApplications =>
                               () => Navigator.of(context).push(
                                 MaterialPageRoute<void>(
                                   builder: (_) => EmployerApplicationsScreen(
@@ -133,22 +141,24 @@ class EmployerDashboardScreen extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                            'Notifications' => () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => InAppNotificationsScreen(
-                                  role: InAppNotificationRole.employer,
-                                  notificationsService:
-                                      notificationsService ??
-                                      const FirestoreInAppNotificationsService(),
+                            _DashboardAction.notifications =>
+                              () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => InAppNotificationsScreen(
+                                    role: InAppNotificationRole.employer,
+                                    notificationsService:
+                                        notificationsService ??
+                                        const FirestoreInAppNotificationsService(),
+                                  ),
                                 ),
                               ),
-                            ),
-                            'My Profile' => () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const EmployerProfileScreen(),
+                            _DashboardAction.myProfile =>
+                              () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => const EmployerProfileScreen(),
+                                ),
                               ),
-                            ),
-                            _ => null,
+                            _DashboardAction.messages => null,
                           },
                         ),
                         if (module != _modules.last) const SizedBox(height: 12),
@@ -170,7 +180,7 @@ class EmployerDashboardScreen extends StatelessWidget {
     } catch (_) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not log out. Please try again.')),
+        const SnackBar(content: Text('로그아웃하지 못했습니다. 다시 시도해 주세요.')),
       );
       return;
     }
@@ -185,14 +195,25 @@ class EmployerDashboardScreen extends StatelessWidget {
 
 class _DashboardModule {
   const _DashboardModule({
+    required this.action,
     required this.title,
     required this.description,
     required this.icon,
   });
 
+  final _DashboardAction action;
   final String title;
   final String description;
   final IconData icon;
+}
+
+enum _DashboardAction {
+  postJob,
+  manageJobs,
+  viewApplications,
+  notifications,
+  messages,
+  myProfile,
 }
 
 class _ModuleCard extends StatelessWidget {
@@ -250,7 +271,7 @@ class _ModuleCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      onTap == null ? 'Coming soon' : 'Tap to open',
+                      onTap == null ? '준비 중' : '눌러서 열기',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: const Color(0xFF247545),
                         fontWeight: FontWeight.w600,

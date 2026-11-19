@@ -71,10 +71,10 @@ class FirestoreInAppNotificationsService implements InAppNotificationsService {
     return List.unmodifiable(
       snapshot.docs
           .map(_notificationFromDocument)
-        .where(
-          (notification) =>
-              notificationTypeMatchesRole(notification.type, role),
-        ),
+          .where(
+            (notification) =>
+                notificationTypeMatchesRole(notification.type, role),
+          ),
     );
   }
 
@@ -84,6 +84,7 @@ class FirestoreInAppNotificationsService implements InAppNotificationsService {
     if (user == null) {
       throw const InAppNotificationsException(
         'Sign in to view your notifications.',
+        koreanMessage: '알림을 확인하려면 로그인해 주세요.',
       );
     }
     await _database
@@ -101,11 +102,13 @@ class FirestoreInAppNotificationsService implements InAppNotificationsService {
     if (user == null) {
       throw const InAppNotificationsException(
         'Sign in to view your notifications.',
+        koreanMessage: '알림을 확인하려면 로그인해 주세요.',
       );
     }
     if (notificationIds.length > 100) {
       throw const InAppNotificationsException(
         'Refresh notifications before marking them as read.',
+        koreanMessage: '알림을 새로고침한 후 읽음으로 표시해 주세요.',
       );
     }
 
@@ -128,6 +131,7 @@ class FirestoreInAppNotificationsService implements InAppNotificationsService {
     if (user == null) {
       throw const InAppNotificationsException(
         'Sign in to view your notifications.',
+        koreanMessage: '알림을 확인하려면 로그인해 주세요.',
       );
     }
     final profile = await _database.collection('users').doc(user.uid).get();
@@ -137,11 +141,13 @@ class FirestoreInAppNotificationsService implements InAppNotificationsService {
     if (profile.data()?['role'] != expectedRole) {
       throw InAppNotificationsException(
         'Only $expectedRole accounts can view these notifications.',
+        koreanMessage: '고용주 계정만 이 알림을 확인할 수 있습니다.',
       );
     }
     if (auth.currentUser?.uid != user.uid) {
       throw const InAppNotificationsException(
         'Your session changed. Please sign in again.',
+        koreanMessage: '로그인 세션이 변경되었습니다. 다시 로그인해 주세요.',
       );
     }
     return user.uid;
@@ -180,7 +186,6 @@ class FirestoreInAppNotificationsService implements InAppNotificationsService {
       readAt: readAt is Timestamp ? readAt.toDate() : null,
     );
   }
-
 }
 
 bool notificationTypeMatchesRole(
@@ -189,19 +194,31 @@ bool notificationTypeMatchesRole(
 ) {
   return switch ((role, type)) {
     (InAppNotificationRole.student, InAppNotificationType.newMessage) ||
-    (InAppNotificationRole.student, InAppNotificationType.applicationAccepted) ||
-    (InAppNotificationRole.student, InAppNotificationType.applicationRejected) ||
+    (
+      InAppNotificationRole.student,
+      InAppNotificationType.applicationAccepted,
+    ) ||
+    (
+      InAppNotificationRole.student,
+      InAppNotificationType.applicationRejected,
+    ) ||
     (InAppNotificationRole.employer, InAppNotificationType.newMessage) ||
-    (InAppNotificationRole.employer, InAppNotificationType.newApplication) =>
-      true,
+    (
+      InAppNotificationRole.employer,
+      InAppNotificationType.newApplication,
+    ) => true,
     _ => false,
   };
 }
 
 class InAppNotificationsException implements Exception {
-  const InAppNotificationsException(this.message);
+  const InAppNotificationsException(
+    this.message, {
+    required this.koreanMessage,
+  });
 
   final String message;
+  final String koreanMessage;
 
   @override
   String toString() => message;

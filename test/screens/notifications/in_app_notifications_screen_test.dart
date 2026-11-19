@@ -55,12 +55,9 @@ void main() {
     final service = FakeInAppNotificationsService();
     await _pumpNotifications(tester, InAppNotificationRole.employer, service);
 
-    expect(find.text('You’re all caught up'), findsOneWidget);
-    expect(
-      find.text('New application and message updates will appear here.'),
-      findsOneWidget,
-    );
-    await tester.tap(find.text('Refresh'));
+    expect(find.text('새로운 알림이 없습니다'), findsOneWidget);
+    expect(find.text('새 지원서와 메시지 알림이 여기에 표시됩니다.'), findsOneWidget);
+    await tester.tap(find.text('새로고침'));
     await tester.pumpAndSettle();
     expect(service.loadCalls, 2);
   });
@@ -115,9 +112,9 @@ void main() {
     await _pumpNotifications(tester, InAppNotificationRole.employer, service);
 
     expect(service.requestedRoles, [InAppNotificationRole.employer]);
-    expect(find.text('New job application'), findsOneWidget);
-    expect(find.text('New message from student'), findsOneWidget);
-    expect(find.text('Unread'), findsOneWidget);
+    expect(find.text('새로운 채용 지원서'), findsOneWidget);
+    expect(find.text('학생에게 새 메시지가 왔습니다'), findsOneWidget);
+    expect(find.text('읽지 않음'), findsOneWidget);
   });
 
   testWidgets('marks an unread notification as read before navigating', (
@@ -203,7 +200,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('View Applications'), findsOneWidget);
+      expect(find.text('지원서 확인'), findsOneWidget);
     },
   );
 
@@ -227,14 +224,14 @@ void main() {
     );
     await _pumpNotifications(tester, InAppNotificationRole.employer, service);
 
-    await tester.tap(find.text('Mark all as read (2)'));
+    await tester.tap(find.text('모두 읽음으로 표시 (2)'));
     await tester.pumpAndSettle();
 
     expect(service.markedAllRead, [
       ['application-event', 'message-event'],
     ]);
-    expect(find.text('Unread'), findsNothing);
-    expect(find.text('Mark all as read'), findsNothing);
+    expect(find.text('읽지 않음'), findsNothing);
+    expect(find.text('모두 읽음으로 표시'), findsNothing);
   });
 
   testWidgets('shows permission-denied errors and retries', (tester) async {
@@ -320,11 +317,11 @@ void main() {
       MaterialApp(home: EmployerDashboardScreen(notificationsService: service)),
     );
 
-    await tester.ensureVisible(find.text('Notifications'));
-    await tester.tap(find.text('Notifications'));
+    await tester.ensureVisible(find.text('알림'));
+    await tester.tap(find.text('알림'));
     await tester.pumpAndSettle();
 
-    expect(find.text('You’re all caught up'), findsOneWidget);
+    expect(find.text('새로운 알림이 없습니다'), findsOneWidget);
     expect(service.requestedRoles, [InAppNotificationRole.employer]);
   });
 }

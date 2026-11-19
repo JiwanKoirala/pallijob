@@ -10,6 +10,45 @@ import 'package:pallijob/screens/student/job_translation_service.dart';
 import '../../support/fake_application_chat_service.dart';
 
 void main() {
+  test('localizes only the missing-title fallback for employer recipients', () {
+    const fallbackConversation = ChatConversation(
+      applicationId: 'job-1_student-1',
+      jobTitle: 'Job application',
+      jobTitleIsFallback: true,
+      studentId: 'student-1',
+      employerId: 'employer-1',
+      currentUserId: 'student-1',
+      currentRole: ChatParticipantRole.student,
+    );
+    const authoredTitleConversation = ChatConversation(
+      applicationId: 'job-1_student-1',
+      jobTitle: 'Job application',
+      studentId: 'student-1',
+      employerId: 'employer-1',
+      currentUserId: 'student-1',
+      currentRole: ChatParticipantRole.student,
+    );
+
+    expect(
+      fallbackConversation.notificationTitleForRecipient(
+        ChatParticipantRole.employer,
+      ),
+      '지원서',
+    );
+    expect(
+      fallbackConversation.notificationTitleForRecipient(
+        ChatParticipantRole.student,
+      ),
+      'Job application',
+    );
+    expect(
+      authoredTitleConversation.notificationTitleForRecipient(
+        ChatParticipantRole.employer,
+      ),
+      'Job application',
+    );
+  });
+
   testWidgets('shows a loading state while verifying the conversation', (
     tester,
   ) async {
@@ -44,6 +83,47 @@ void main() {
       find.text('Send a message to start this conversation.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('employer chat UI is Korean while the message stays unchanged', (
+    tester,
+  ) async {
+    const conversation = ChatConversation(
+      applicationId: 'job-1_student-1',
+      jobTitle: 'Cafe Assistant',
+      studentId: 'student-1',
+      employerId: 'employer-1',
+      currentUserId: 'employer-1',
+      currentRole: ChatParticipantRole.employer,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ApplicationChatScreen(
+          applicationId: 'job-1_student-1',
+          uiRole: ChatParticipantRole.employer,
+          chatService: FakeApplicationChatService(
+            conversation: Future.value(conversation),
+            messages: Stream.value([
+              ChatMessage(
+                id: 'employer-message',
+                senderId: 'employer-1',
+                receiverId: 'student-1',
+                content: 'Please arrive at 9.',
+                timestamp: DateTime(2026, 11, 1, 9),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('채팅'), findsOneWidget);
+    expect(find.text('나 · 고용주'), findsOneWidget);
+    expect(find.text('메시지를 입력하세요'), findsOneWidget);
+    expect(find.text('Please arrive at 9.'), findsOneWidget);
+    expect(find.text('영어로 번역'), findsOneWidget);
+    expect(find.text('Translate to English'), findsNothing);
   });
 
   testWidgets('renders messages in order with participant roles and times', (

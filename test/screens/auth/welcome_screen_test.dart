@@ -11,7 +11,7 @@ void main() {
     expect(find.text('PalliJob'), findsOneWidget);
     expect(find.text('Find the right part-time job in Korea.'), findsOneWidget);
     expect(find.text('Continue as Student'), findsOneWidget);
-    expect(find.text('Continue as Employer'), findsOneWidget);
+    expect(find.text('고용주로 계속하기'), findsOneWidget);
   });
 
   testWidgets('opens the role-specific authentication screen', (tester) async {
@@ -26,10 +26,10 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    final employerButton = find.text('Continue as Employer');
+    final employerButton = find.text('고용주로 계속하기');
     await tester.ensureVisible(employerButton);
     await tester.tap(employerButton);
     await tester.pumpAndSettle();
-    expect(find.text('Create your employer account'), findsOneWidget);
+    expect(find.text('고용주 계정 만들기'), findsOneWidget);
   });
 }

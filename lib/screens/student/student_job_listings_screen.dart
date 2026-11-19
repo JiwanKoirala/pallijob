@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:pallijob/l10n/role_aware_strings.dart';
 import 'package:pallijob/screens/student/job_application_service.dart';
 import 'package:pallijob/screens/student/student_job_matching.dart';
 import 'package:pallijob/screens/student/job_translation_service.dart';
@@ -84,7 +85,7 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FBF8),
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Search Jobs',
           style: TextStyle(
             color: Color(0xFF173B27),
@@ -771,12 +772,14 @@ class StudentJobDetailsScreen extends StatefulWidget {
   const StudentJobDetailsScreen({
     super.key,
     required this.job,
+    this.isEmployerView = false,
     this.applicationService = const FirestoreJobApplicationService(),
     this.visaGuidanceService = const FirestoreStudentVisaGuidanceService(),
     this.translationService = const PlatformJobTranslationService(),
   });
 
   final StudentJobListing job;
+  final bool isEmployerView;
   final JobApplicationService applicationService;
   final StudentVisaGuidanceService visaGuidanceService;
   final JobTranslationService translationService;
@@ -800,16 +803,19 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    _applicationStatus = widget.applicationService.getStatus(widget.job.id);
+    _applicationStatus = widget.isEmployerView
+        ? Future.value(JobApplicationStatus.studentRoleRequired)
+        : widget.applicationService.getStatus(widget.job.id);
   }
 
   @override
   Widget build(BuildContext context) {
+    final strings = RoleAwareStrings(isEmployer: widget.isEmployerView);
     return Scaffold(
       backgroundColor: const Color(0xFFF8FBF8),
       appBar: AppBar(
-        title: const Text(
-          'Job Details',
+        title: Text(
+          strings.text(english: 'Job Details', korean: '공고 상세 정보'),
           style: TextStyle(
             color: Color(0xFF173B27),
             fontWeight: FontWeight.w800,
@@ -871,26 +877,46 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
                       ),
                       const SizedBox(height: 12),
                       _JobDetailSection(
-                        title: 'Work type',
-                        content: widget.job.workType ?? 'Not specified',
+                        title: strings.text(
+                          english: 'Work type',
+                          korean: '근무 형태',
+                        ),
+                        content: widget.job.workType == null
+                            ? strings.text(
+                                english: 'Not specified',
+                                korean: '미지정',
+                              )
+                            : strings.workType(widget.job.workType!),
                       ),
                       const SizedBox(height: 12),
                       _JobDetailSection(
-                        title: 'Schedule',
-                        content: widget.job.schedule ?? 'Not specified',
+                        title: strings.text(
+                          english: 'Schedule',
+                          korean: '근무 일정',
+                        ),
+                        content: widget.job.schedule == null
+                            ? strings.text(
+                                english: 'Not specified',
+                                korean: '미지정',
+                              )
+                            : strings.schedule(widget.job.schedule!),
                       ),
                       const SizedBox(height: 24),
                       SegmentedButton<bool>(
                         key: const ValueKey('job-language-toggle'),
-                        segments: const [
+                        segments: [
                           ButtonSegment<bool>(
                             value: false,
-                            label: Text('Original'),
+                            label: Text(
+                              strings.text(english: 'Original', korean: '원문'),
+                            ),
                             icon: Icon(Icons.article_outlined),
                           ),
                           ButtonSegment<bool>(
                             value: true,
-                            label: Text('English'),
+                            label: Text(
+                              strings.text(english: 'English', korean: '영어'),
+                            ),
                             icon: Icon(Icons.translate_rounded),
                           ),
                         ],
@@ -903,11 +929,14 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
                       ),
                       if (_showEnglish) ...[
                         const SizedBox(height: 12),
-                        _translationStatus(),
+                        _translationStatus(strings),
                       ],
                       const SizedBox(height: 18),
                       _JobDetailSection(
-                        title: 'Description',
+                        title: strings.text(
+                          english: 'Description',
+                          korean: '상세 설명',
+                        ),
                         content: _displayContent(
                           JobInformationField.description,
                           widget.job.description,
@@ -915,7 +944,10 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
                       ),
                       const SizedBox(height: 16),
                       _JobDetailSection(
-                        title: 'Requirements',
+                        title: strings.text(
+                          english: 'Requirements',
+                          korean: '지원 요건',
+                        ),
                         content: _displayContent(
                           JobInformationField.requirements,
                           widget.job.requirements,
@@ -923,38 +955,44 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
                       ),
                       const SizedBox(height: 16),
                       _JobDetailSection(
-                        title: 'Employer ID',
+                        title: strings.text(
+                          english: 'Employer ID',
+                          korean: '고용주 ID',
+                        ),
                         content: widget.job.employerId,
                       ),
                       const SizedBox(height: 16),
                       _JobDetailSection(
-                        title: 'Posted',
-                        content: _formatDate(widget.job.createdAt),
+                        title: strings.text(english: 'Posted', korean: '등록일'),
+                        content: _formatDate(widget.job.createdAt, strings),
                       ),
                       const SizedBox(height: 24),
-                      OutlinedButton.icon(
-                        key: const ValueKey('check-visa-eligibility'),
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => StudentVisaEligibilityScreen(
-                              jobId: widget.job.id,
-                              guidanceService: widget.visaGuidanceService,
+                      if (!widget.isEmployerView)
+                        OutlinedButton.icon(
+                          key: const ValueKey('check-visa-eligibility'),
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => StudentVisaEligibilityScreen(
+                                jobId: widget.job.id,
+                                guidanceService: widget.visaGuidanceService,
+                              ),
+                            ),
+                          ),
+                          icon: const Icon(Icons.info_outline_rounded),
+                          label: const Text('Check Visa Eligibility'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF247545),
+                            side: const BorderSide(color: Color(0xFF247545)),
+                            minimumSize: const Size.fromHeight(50),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
                             ),
                           ),
                         ),
-                        icon: const Icon(Icons.info_outline_rounded),
-                        label: const Text('Check Visa Eligibility'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF247545),
-                          side: const BorderSide(color: Color(0xFF247545)),
-                          minimumSize: const Size.fromHeight(50),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      _applyButton(),
+                      if (!widget.isEmployerView) ...[
+                        const SizedBox(height: 14),
+                        _applyButton(),
+                      ],
                     ],
                   ),
                 ),
@@ -1034,13 +1072,20 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
     return _translatedContent?.content[field]?.trim() ?? original;
   }
 
-  Widget _translationStatus() {
+  Widget _translationStatus(RoleAwareStrings strings) {
     if (_isTranslating) {
-      final message = switch (_translationProgress) {
+      final englishMessage = switch (_translationProgress) {
         JobTranslationProgress.checkingModels =>
           'Checking for downloaded Korean and English models...',
         JobTranslationProgress.downloadingModels => 'Preparing language models. Internet may be required the first time; models use device storage.',
         JobTranslationProgress.translating => 'Translating on your device...',
+      };
+      final koreanMessage = switch (_translationProgress) {
+        JobTranslationProgress.checkingModels =>
+          '다운로드된 한국어·영어 번역 모델을 확인하고 있습니다…',
+        JobTranslationProgress.downloadingModels =>
+          '번역 모델을 준비하고 있습니다. 최초 사용 시 인터넷 연결이 필요할 수 있습니다.',
+        JobTranslationProgress.translating => '기기에서 번역 중…',
       };
       return Row(
         children: [
@@ -1053,7 +1098,11 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
             ),
           ),
           const SizedBox(width: 10),
-          Expanded(child: Text(message)),
+          Expanded(
+            child: Text(
+              strings.text(english: englishMessage, korean: koreanMessage),
+            ),
+          ),
         ],
       );
     }
@@ -1061,40 +1110,60 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
     final error = _translationError;
     if (error is JobTranslationUnavailableException) {
       return _TranslationMessage(
-        message: 'English translation is unavailable until a translation provider is selected and securely integrated. Original job information is shown below.',
+        message: strings.text(
+          english: 'English translation is unavailable until a translation provider is selected and securely integrated. Original job information is shown below.',
+          korean: '번역 서비스가 안전하게 연결되기 전까지 영어 번역을 사용할 수 없습니다. 아래에 원문을 표시합니다.',
+        ),
       );
     }
     if (error is JobTranslationUnsupportedPlatformException) {
-      return const _TranslationMessage(
-        message: 'Translation unavailable on this device. Apple Translation requires a supported iOS version and device; Android uses on-device translation. Original information is shown below.',
+      return _TranslationMessage(
+        message: strings.text(
+          english: 'Translation unavailable on this device. Apple Translation requires a supported iOS version and device; Android uses on-device translation. Original information is shown below.',
+          korean: '이 기기에서는 번역을 사용할 수 없습니다. 원문은 변경되지 않으며 아래에 표시됩니다.',
+        ),
       );
     }
     if (error is JobTranslationModelDownloadException) {
       return _TranslationMessage(
-        message: 'Could not prepare the Korean and English translation resources. Check your internet connection and allow language downloads, then try again. First setup may need internet and uses device storage; downloaded resources are reused later.',
+        message: strings.text(
+          english: 'Could not prepare the Korean and English translation resources. Check your internet connection and allow language downloads, then try again. First setup may need internet and uses device storage; downloaded resources are reused later.',
+          korean:
+              '한국어·영어 번역 리소스를 준비하지 못했습니다. 네트워크와 언어 다운로드 설정을 확인한 후 다시 시도해 주세요.',
+        ),
         action: TextButton(
           onPressed: () => _requestTranslation(retry: true),
-          child: const Text('Try again'),
+          child: Text(strings.text(english: 'Try again', korean: '다시 시도')),
         ),
       );
     }
     if (error is JobTranslationContentMissingException) {
-      return const _TranslationMessage(
-        message: 'There is no job title, description, or requirements content available to translate. Original information is shown below.',
+      return _TranslationMessage(
+        message: strings.text(
+          english: 'There is no job title, description, or requirements content available to translate. Original information is shown below.',
+          korean: '번역할 공고 제목, 상세 설명 또는 지원 요건이 없습니다. 아래에 원문을 표시합니다.',
+        ),
       );
     }
     if (error != null) {
       return _TranslationMessage(
-        message: 'We could not translate all job information. Original information is shown below.',
+        message: strings.text(
+          english: 'We could not translate all job information. Original information is shown below.',
+          korean: '공고 정보를 모두 번역하지 못했습니다. 아래에 원문을 표시합니다.',
+        ),
         action: TextButton(
           onPressed: () => _requestTranslation(retry: true),
-          child: const Text('Try again'),
+          child: Text(strings.text(english: 'Try again', korean: '다시 시도')),
         ),
       );
     }
     if (_translatedContent != null) {
-      return const _TranslationMessage(
-        message: 'English translation. The original listing is unchanged. Language resources are stored on this device and may be reused offline.',
+      return _TranslationMessage(
+        message: strings.text(
+          english: 'English translation. The original listing is unchanged. Language resources are stored on this device and may be reused offline.',
+          korean:
+              '영어 번역입니다. 원본 공고는 변경되지 않았으며 번역 리소스는 기기에 저장되어 오프라인에서도 사용할 수 있습니다.',
+        ),
       );
     }
     return const SizedBox.shrink();
@@ -1110,7 +1179,9 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
       _translatedContent = null;
       _translationError = null;
       _translationProgress = JobTranslationProgress.checkingModels;
-      _applicationStatus = widget.applicationService.getStatus(widget.job.id);
+      _applicationStatus = widget.isEmployerView
+          ? Future.value(JobApplicationStatus.studentRoleRequired)
+          : widget.applicationService.getStatus(widget.job.id);
     }
   }
 
@@ -1285,10 +1356,16 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
       );
   }
 
-  String _formatDate(DateTime? date) {
-    if (date == null) return 'Not available';
+  String _formatDate(DateTime? date, RoleAwareStrings strings) {
+    if (date == null) {
+      return strings.text(english: 'Not available', korean: '정보 없음');
+    }
     final local = date.toLocal();
     String twoDigits(int value) => value.toString().padLeft(2, '0');
+    if (strings.isEmployer) {
+      return '${local.year}년 ${local.month}월 ${local.day}일 '
+          '${twoDigits(local.hour)}:${twoDigits(local.minute)}';
+    }
     return '${local.year}-${twoDigits(local.month)}-${twoDigits(local.day)} '
         '${twoDigits(local.hour)}:${twoDigits(local.minute)}';
   }

@@ -79,7 +79,7 @@ class WelcomeScreen extends StatelessWidget {
                             onPressed: () =>
                                 _openAuth(context, role: 'Employer'),
                             icon: const Icon(Icons.business_outlined),
-                            label: const Text('Continue as Employer'),
+                            label: const Text('고용주로 계속하기'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: const Color(0xFF247545),
                               side: const BorderSide(color: Color(0xFFB8D7C2)),

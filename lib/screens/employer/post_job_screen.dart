@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:pallijob/l10n/role_aware_strings.dart';
 import 'package:pallijob/screens/student/student_job_matching.dart';
 
 class PostJobScreen extends StatefulWidget {
@@ -36,7 +37,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
       backgroundColor: const Color(0xFFF8FBF8),
       appBar: AppBar(
         title: const Text(
-          'Post a Job',
+          '채용 공고 등록',
           style: TextStyle(
             color: Color(0xFF173B27),
             fontWeight: FontWeight.w800,
@@ -68,7 +69,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          'Create a job listing',
+                          '채용 공고 작성',
                           style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(
                                 color: const Color(0xFF173B27),
@@ -78,7 +79,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Share the details students need to know.',
+                          '학생에게 필요한 공고 정보를 입력해 주세요.',
                           style: Theme.of(context).textTheme.bodyLarge
                               ?.copyWith(
                                 color: const Color(0xFF647369),
@@ -88,27 +89,27 @@ class _PostJobScreenState extends State<PostJobScreen> {
                         const SizedBox(height: 24),
                         _textField(
                           controller: _titleController,
-                          label: 'Job title',
+                          label: '공고 제목',
                           icon: Icons.work_outline_rounded,
                         ),
                         const SizedBox(height: 16),
                         _textField(
                           controller: _descriptionController,
-                          label: 'Description',
+                          label: '상세 설명',
                           icon: Icons.subject_rounded,
                           maxLines: 4,
                         ),
                         const SizedBox(height: 16),
                         _textField(
                           controller: _locationController,
-                          label: 'Location',
+                          label: '근무 지역',
                           icon: Icons.location_on_outlined,
                           textCapitalization: TextCapitalization.words,
                         ),
                         const SizedBox(height: 16),
                         _textField(
                           controller: _requirementsController,
-                          label: 'Requirements',
+                          label: '지원 요건',
                           icon: Icons.checklist_rounded,
                           maxLines: 4,
                         ),
@@ -117,19 +118,22 @@ class _PostJobScreenState extends State<PostJobScreen> {
                           key: const ValueKey('post-job-work-type'),
                           initialValue: _selectedWorkType,
                           decoration: const InputDecoration(
-                            labelText: 'Work type',
+                            labelText: '근무 형태',
                             prefixIcon: Icon(Icons.work_outline_rounded),
                           ),
                           items: jobWorkTypes
                               .map(
-                                (workType) => DropdownMenuItem(
+                                (workType) => DropdownMenuItem<String>(
                                   value: workType,
-                                  child: Text(workType),
+                                  child: Text(
+                                    const RoleAwareStrings(isEmployer: true)
+                                        .workType(workType),
+                                  ),
                                 ),
                               )
                               .toList(growable: false),
                           validator: (value) =>
-                              value == null ? 'Select a work type.' : null,
+                              value == null ? '근무 형태를 선택해 주세요.' : null,
                           onChanged: _isLoading
                               ? null
                               : (value) =>
@@ -140,18 +144,21 @@ class _PostJobScreenState extends State<PostJobScreen> {
                           key: const ValueKey('post-job-schedule'),
                           initialValue: _selectedSchedule,
                           decoration: const InputDecoration(
-                            labelText: 'Schedule (optional)',
+                            labelText: '근무 일정 (선택)',
                             prefixIcon: Icon(Icons.calendar_today_outlined),
                           ),
                           items: [
                             const DropdownMenuItem<String?>(
                               value: null,
-                              child: Text('Not specified'),
+                              child: Text('선택 안 함'),
                             ),
                             ...jobSchedules.map(
                               (schedule) => DropdownMenuItem<String?>(
                                 value: schedule,
-                                child: Text(schedule),
+                                child: Text(
+                                  const RoleAwareStrings(isEmployer: true)
+                                      .schedule(schedule),
+                                ),
                               ),
                             ),
                           ],
@@ -181,7 +188,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : const Text('Post Job'),
+                                : const Text('공고 등록'),
                           ),
                         ),
                       ],
@@ -211,7 +218,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
       minLines: maxLines == 1 ? 1 : maxLines,
       validator: (value) {
         if (value == null || value.trim().isEmpty) {
-          return '$label is required.';
+          return '$label은 필수 입력 항목입니다.';
         }
         return null;
       },
@@ -247,7 +254,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
       final auth = FirebaseAuth.instance;
       final user = auth.currentUser;
       if (user == null) {
-        _showMessage('You must be signed in as an employer to post a job.');
+        _showMessage('고용주 계정으로 로그인해 주세요.');
         return;
       }
 
@@ -257,11 +264,11 @@ class _PostJobScreenState extends State<PostJobScreen> {
           .get();
       if (!mounted) return;
       if (!profile.exists || profile.data()?['role'] != 'employer') {
-        _showMessage('Only verified employer accounts can post jobs.');
+        _showMessage('인증된 고용주 계정만 채용 공고를 등록할 수 있습니다.');
         return;
       }
       if (auth.currentUser?.uid != user.uid) {
-        _showMessage('Your session expired. Please sign in again.');
+        _showMessage('로그인 세션이 만료되었습니다. 다시 로그인해 주세요.');
         return;
       }
 
@@ -285,7 +292,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
         _selectedWorkType = null;
         _selectedSchedule = null;
       });
-      _showMessage('Job posted successfully.', isError: false);
+      _showMessage('채용 공고가 등록되었습니다.', isError: false);
     } on FirebaseException catch (error) {
       if (!mounted) return;
       _showMessage(_firebaseErrorMessage(error));
@@ -296,11 +303,11 @@ class _PostJobScreenState extends State<PostJobScreen> {
 
   String _firebaseErrorMessage(FirebaseException error) {
     return switch (error.code) {
-      'permission-denied' => 'Firestore denied this request. Check that the deployed rules allow verified employers to read their profile and create jobs.',
+      'permission-denied' =>
+        '요청이 거부되었습니다. 배포된 Firestore 규칙에서 고용주 프로필 조회와 공고 등록이 허용되는지 확인해 주세요.',
       'unavailable' || 'network-request-failed' =>
-        'Could not reach Firebase. Check your connection and try again.',
-      _ =>
-        'Could not post the job${error.message == null ? '.' : ': ${error.message}'}',
+        'Firebase에 연결할 수 없습니다. 네트워크를 확인한 후 다시 시도해 주세요.',
+      _ => '공고를 등록하지 못했습니다. 다시 시도해 주세요.',
     };
   }
 

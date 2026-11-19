@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:pallijob/l10n/role_aware_strings.dart';
 import 'package:pallijob/screens/student/student_job_matching.dart';
 import 'package:pallijob/screens/student/student_job_listings_screen.dart';
 
@@ -49,7 +50,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
       backgroundColor: const Color(0xFFF8FBF8),
       appBar: AppBar(
         title: const Text(
-          'Edit Job',
+          '공고 수정',
           style: TextStyle(
             color: Color(0xFF173B27),
             fontWeight: FontWeight.w800,
@@ -81,7 +82,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          'Update job listing',
+                          '채용 공고 수정',
                           style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(
                                 color: const Color(0xFF173B27),
@@ -91,7 +92,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Edit the details students see in your listing.',
+                          '학생에게 표시되는 공고 정보를 수정합니다.',
                           style: Theme.of(context).textTheme.bodyLarge
                               ?.copyWith(
                                 color: const Color(0xFF647369),
@@ -101,27 +102,27 @@ class _EditJobScreenState extends State<EditJobScreen> {
                         const SizedBox(height: 24),
                         _textField(
                           controller: _titleController,
-                          label: 'Job title',
+                          label: '공고 제목',
                           icon: Icons.work_outline_rounded,
                         ),
                         const SizedBox(height: 16),
                         _textField(
                           controller: _descriptionController,
-                          label: 'Description',
+                          label: '상세 설명',
                           icon: Icons.subject_rounded,
                           maxLines: 4,
                         ),
                         const SizedBox(height: 16),
                         _textField(
                           controller: _locationController,
-                          label: 'Location',
+                          label: '근무 지역',
                           icon: Icons.location_on_outlined,
                           textCapitalization: TextCapitalization.words,
                         ),
                         const SizedBox(height: 16),
                         _textField(
                           controller: _requirementsController,
-                          label: 'Requirements',
+                          label: '지원 요건',
                           icon: Icons.checklist_rounded,
                           maxLines: 4,
                         ),
@@ -130,18 +131,21 @@ class _EditJobScreenState extends State<EditJobScreen> {
                           key: const ValueKey('edit-job-work-type'),
                           initialValue: _selectedWorkType,
                           decoration: const InputDecoration(
-                            labelText: 'Work type',
+                            labelText: '근무 형태',
                             prefixIcon: Icon(Icons.work_outline_rounded),
                           ),
                           items: [
                             const DropdownMenuItem<String?>(
                               value: null,
-                              child: Text('Not specified'),
+                              child: Text('선택 안 함'),
                             ),
                             ...jobWorkTypes.map(
                               (workType) => DropdownMenuItem<String?>(
                                 value: workType,
-                                child: Text(workType),
+                                child: Text(
+                                  const RoleAwareStrings(isEmployer: true)
+                                      .workType(workType),
+                                ),
                               ),
                             ),
                           ],
@@ -155,18 +159,21 @@ class _EditJobScreenState extends State<EditJobScreen> {
                           key: const ValueKey('edit-job-schedule'),
                           initialValue: _selectedSchedule,
                           decoration: const InputDecoration(
-                            labelText: 'Schedule (optional)',
+                            labelText: '근무 일정 (선택)',
                             prefixIcon: Icon(Icons.calendar_today_outlined),
                           ),
                           items: [
                             const DropdownMenuItem<String?>(
                               value: null,
-                              child: Text('Not specified'),
+                              child: Text('선택 안 함'),
                             ),
                             ...jobSchedules.map(
                               (schedule) => DropdownMenuItem<String?>(
                                 value: schedule,
-                                child: Text(schedule),
+                                child: Text(
+                                  const RoleAwareStrings(isEmployer: true)
+                                      .schedule(schedule),
+                                ),
                               ),
                             ),
                           ],
@@ -196,7 +203,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : const Text('Save Changes'),
+                                : const Text('변경 사항 저장'),
                           ),
                         ),
                       ],
@@ -227,7 +234,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
       minLines: maxLines == 1 ? 1 : maxLines,
       validator: (value) {
         if (value == null || value.trim().isEmpty) {
-          return '$label is required.';
+          return '$label은 필수 입력 항목입니다.';
         }
         return null;
       },
@@ -263,9 +270,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
       final auth = FirebaseAuth.instance;
       final user = auth.currentUser;
       if (user == null) {
-        _showMessage(
-          'You must be signed in as the job owner to edit this job.',
-        );
+        _showMessage('공고 소유자 계정으로 로그인해 주세요.');
         return;
       }
 
@@ -275,16 +280,16 @@ class _EditJobScreenState extends State<EditJobScreen> {
       final jobSnapshot = await jobReference.get();
       if (!mounted) return;
       if (!jobSnapshot.exists) {
-        _showMessage('This job no longer exists.');
+        _showMessage('이 채용 공고는 더 이상 존재하지 않습니다.');
         return;
       }
       if (jobSnapshot.data()?['employerId'] != user.uid ||
           widget.job.employerId != user.uid) {
-        _showMessage('You can only edit jobs posted by your account.');
+        _showMessage('내 계정으로 등록한 공고만 수정할 수 있습니다.');
         return;
       }
       if (auth.currentUser?.uid != user.uid) {
-        _showMessage('Your session expired. Please sign in again.');
+        _showMessage('로그인 세션이 만료되었습니다. 다시 로그인해 주세요.');
         return;
       }
 
@@ -302,9 +307,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
       Navigator.of(context).pop(true);
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('Job updated successfully.')),
-        );
+        ..showSnackBar(const SnackBar(content: Text('채용 공고가 수정되었습니다.')));
     } on FirebaseException catch (error) {
       if (!mounted) return;
       _showMessage(_firebaseErrorMessage(error));
@@ -315,12 +318,12 @@ class _EditJobScreenState extends State<EditJobScreen> {
 
   String _firebaseErrorMessage(FirebaseException error) {
     return switch (error.code) {
-      'permission-denied' => 'Firestore denied this update. Make sure the job belongs to your employer account and the edit rules are deployed.',
-      'not-found' => 'This job no longer exists.',
+      'permission-denied' =>
+        '수정 권한이 없습니다. 내 계정으로 등록한 공고인지, 공고 수정 규칙이 배포되었는지 확인해 주세요.',
+      'not-found' => '이 채용 공고는 더 이상 존재하지 않습니다.',
       'unavailable' || 'network-request-failed' =>
-        'Could not reach Firebase. Check your connection and try again.',
-      _ =>
-        'Could not update the job${error.message == null ? '.' : ': ${error.message}'}',
+        'Firebase에 연결할 수 없습니다. 네트워크를 확인한 후 다시 시도해 주세요.',
+      _ => '공고를 수정하지 못했습니다. 다시 시도해 주세요.',
     };
   }
 

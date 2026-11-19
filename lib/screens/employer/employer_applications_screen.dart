@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:pallijob/l10n/role_aware_strings.dart';
 import 'package:pallijob/screens/chat/application_chat_screen.dart';
 
 class EmployerApplication {
@@ -48,20 +49,18 @@ class FirestoreEmployerApplicationsService
     final user = auth.currentUser;
     if (user == null) {
       throw const EmployerApplicationsException(
-        'Sign in with an employer account to view applications.',
+        '지원서를 확인하려면 고용주 계정으로 로그인해 주세요.',
       );
     }
 
     final firestore = FirebaseFirestore.instance;
     final profile = await firestore.collection('users').doc(user.uid).get();
     if (profile.data()?['role'] != 'employer') {
-      throw const EmployerApplicationsException(
-        'Only employer accounts can view received applications.',
-      );
+      throw const EmployerApplicationsException('고용주 계정만 접수된 지원서를 확인할 수 있습니다.');
     }
     if (auth.currentUser?.uid != user.uid) {
       throw const EmployerApplicationsException(
-        'Your session changed. Please sign in again.',
+        '로그인 세션이 변경되었습니다. 다시 로그인해 주세요.',
       );
     }
 
@@ -71,10 +70,7 @@ class FirestoreEmployerApplicationsService
         .get();
     final jobTitles = {
       for (final job in jobs.docs)
-        job.id: _textValue(
-          job.data()['title'],
-          fallback: 'Job information unavailable',
-        ),
+        job.id: _textValue(job.data()['title'], fallback: '공고 정보 없음'),
     };
     final jobOwners = {
       for (final job in jobs.docs) job.id: job.data()['employerId'],
@@ -109,7 +105,7 @@ class FirestoreEmployerApplicationsService
       final jobId = _textValue(data['jobId']);
       final jobTitle = jobTitles[jobId];
       final actualEmployerId = jobOwners[jobId];
-      final applicantId = _textValue(data['studentId'], fallback: 'Unknown');
+      final applicantId = _textValue(data['studentId']);
       final ownershipMatches =
           actualEmployerId != null &&
           (!data.containsKey('employerId') ||
@@ -119,14 +115,14 @@ class FirestoreEmployerApplicationsService
         EmployerApplication(
           id: application.id,
           jobId: jobId,
-          jobTitle: jobTitle ?? 'Job no longer available',
+          jobTitle: jobTitle ?? '더 이상 이용할 수 없는 공고',
           applicantId: applicantId,
-          status: _textValue(data['status'], fallback: 'Unknown'),
+          status: _textValue(data['status']),
           dateApplied: appliedAt is Timestamp ? appliedAt.toDate() : null,
           jobUnavailable: jobTitle == null,
           canChat:
               ownershipMatches &&
-              applicantId != 'Unknown' &&
+              applicantId.isNotEmpty &&
               applicantId != user.uid,
           canDecide: ownershipMatches,
         ),
@@ -150,7 +146,7 @@ class FirestoreEmployerApplicationsService
     final user = auth.currentUser;
     if (user == null) {
       throw const EmployerApplicationDecisionException(
-        'Sign in with an employer account to update applications.',
+        '지원서를 처리하려면 고용주 계정으로 로그인해 주세요.',
       );
     }
 
@@ -164,7 +160,7 @@ class FirestoreEmployerApplicationsService
       final profile = await transaction.get(profileReference);
       if (profile.data()?['role'] != 'employer') {
         throw const EmployerApplicationDecisionException(
-          'Only employer accounts can update applications.',
+          '고용주 계정만 지원서를 처리할 수 있습니다.',
         );
       }
 
@@ -172,24 +168,22 @@ class FirestoreEmployerApplicationsService
       final data = application.data();
       if (data == null) {
         throw const EmployerApplicationDecisionException(
-          'This application no longer exists.',
+          '이 지원서는 더 이상 존재하지 않습니다.',
         );
       }
       if (data['status'] != 'pending') {
         throw const EmployerApplicationDecisionException(
-          'Only pending applications can be updated.',
+          '검토 중인 지원서만 처리할 수 있습니다.',
         );
       }
       final studentId = data['studentId'];
       if (studentId is! String || studentId.trim().isEmpty) {
-        throw const EmployerApplicationDecisionException(
-          'This application does not have a valid student applicant.',
-        );
+        throw const EmployerApplicationDecisionException('지원자 정보가 올바르지 않습니다.');
       }
       final jobId = data['jobId'];
       if (jobId is! String || jobId.trim().isEmpty) {
         throw const EmployerApplicationDecisionException(
-          'This application has invalid job information.',
+          '지원서의 공고 정보가 올바르지 않습니다.',
         );
       }
       final job = await transaction.get(
@@ -199,18 +193,18 @@ class FirestoreEmployerApplicationsService
           (data.containsKey('employerId') &&
               data['employerId'] != job.data()?['employerId'])) {
         throw const EmployerApplicationDecisionException(
-          'You can only update applications for jobs you own.',
+          '내가 등록한 공고의 지원서만 처리할 수 있습니다.',
         );
       }
       if (auth.currentUser?.uid != user.uid) {
         throw const EmployerApplicationDecisionException(
-          'Your session changed. Please sign in again.',
+          '로그인 세션이 변경되었습니다. 다시 로그인해 주세요.',
         );
       }
       final jobTitle = job.data()?['title'];
       if (jobTitle is! String || jobTitle.trim().isEmpty) {
         throw const EmployerApplicationDecisionException(
-          'This job is missing its title, so the application cannot be updated.',
+          '공고 제목이 없어 지원서를 처리할 수 없습니다.',
         );
       }
 
@@ -293,7 +287,7 @@ class _EmployerApplicationsScreenState
       backgroundColor: const Color(0xFFF8FBF8),
       appBar: AppBar(
         title: const Text(
-          'View Applications',
+          '지원서 확인',
           style: TextStyle(
             color: Color(0xFF173B27),
             fontWeight: FontWeight.w800,
@@ -309,7 +303,7 @@ class _EmployerApplicationsScreenState
           if (snapshot.hasError) {
             return _EmployerApplicationsState(
               icon: Icons.cloud_off_outlined,
-              title: 'Could not load applications',
+              title: '지원서를 불러오지 못했습니다',
               message: _errorMessage(snapshot.error),
               action: TextButton(
                 onPressed: () {
@@ -317,15 +311,15 @@ class _EmployerApplicationsScreenState
                     _applicationsFuture = _service.loadApplications();
                   });
                 },
-                child: const Text('Retry'),
+                child: const Text('다시 시도'),
               ),
             );
           }
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const _EmployerApplicationsState(
               loading: true,
-              title: 'Loading applications',
-              message: 'Please wait while we load applications for your jobs.',
+              title: '지원서를 불러오는 중',
+              message: '등록한 공고의 지원 내역을 불러오고 있습니다.',
             );
           }
 
@@ -333,8 +327,8 @@ class _EmployerApplicationsScreenState
           if (applications.isEmpty) {
             return const _EmployerApplicationsState(
               icon: Icons.assignment_outlined,
-              title: 'No applications received yet',
-              message: 'Applications for your job listings will appear here.',
+              title: '아직 지원서가 없습니다',
+              message: '채용 공고에 지원서가 접수되면 여기에 표시됩니다.',
             );
           }
 
@@ -365,6 +359,7 @@ class _EmployerApplicationsScreenState
                       MaterialPageRoute<void>(
                         builder: (_) => ApplicationChatScreen(
                           applicationId: application.id,
+                          uiRole: ChatParticipantRole.employer,
                           chatService:
                               widget.chatService ??
                               const FirestoreApplicationChatService(),
@@ -392,20 +387,20 @@ class _EmployerApplicationsScreenState
     }
 
     final decisionLabel = decision == EmployerApplicationDecision.accepted
-        ? 'Accept'
-        : 'Reject';
+        ? '수락'
+        : '거절';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('$decisionLabel application?'),
+        title: Text('$decisionLabel 지원서'),
         content: Text(
-          '$decisionLabel the application from ${application.applicantId} for ${application.jobTitle}?',
+          '${application.applicantId}님의 "${application.jobTitle}" 지원을 $decisionLabel하시겠습니까?',
         ),
         actions: [
           TextButton(
             key: ValueKey('cancel-decision-${application.id}'),
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: const Text('취소'),
           ),
           FilledButton(
             key: ValueKey('confirm-decision-${application.id}'),
@@ -444,7 +439,7 @@ class _EmployerApplicationsScreenState
 
     if (!mounted) return;
     final message = error == null
-        ? 'Application ${decision.name}.'
+        ? '지원서를 ${decision == EmployerApplicationDecision.accepted ? '수락' : '거절'}했습니다.'
         : _decisionErrorMessage(error);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -459,17 +454,17 @@ class _EmployerApplicationsScreenState
   String _decisionErrorMessage(Object error) {
     if (error is EmployerApplicationDecisionException) return error.message;
     if (error is FirebaseException && error.code == 'permission-denied') {
-      return 'Firestore denied this decision. Confirm you own this job, are signed in as an employer, and that the application update rules are deployed.';
+      return '처리 권한이 없습니다. 내 공고의 지원서인지, 고용주 계정으로 로그인했는지, 지원서 변경 규칙이 배포되었는지 확인해 주세요.';
     }
     if (error is FirebaseException &&
         (error.code == 'unavailable' ||
             error.code == 'network-request-failed')) {
-      return 'Could not reach Firebase. Check your connection and try again.';
+      return 'Firebase에 연결할 수 없습니다. 네트워크를 확인한 후 다시 시도해 주세요.';
     }
     if (error is FirebaseException) {
-      return 'A Firebase error occurred while updating the application. Please try again.';
+      return '지원서를 처리하지 못했습니다. 다시 시도해 주세요.';
     }
-    return 'Could not update the application. Please try again. ($error)';
+    return '지원서를 처리하지 못했습니다. 다시 시도해 주세요.';
   }
 }
 
@@ -488,9 +483,10 @@ class _EmployerApplicationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const strings = RoleAwareStrings(isEmployer: true);
     final dateText = application.dateApplied == null
-        ? 'Date unavailable'
-        : 'Submitted ${MaterialLocalizations.of(context).formatMediumDate(application.dateApplied!)}';
+        ? '날짜 정보 없음'
+        : strings.mediumDate(context, application.dateApplied!);
 
     return Center(
       child: ConstrainedBox(
@@ -517,31 +513,30 @@ class _EmployerApplicationCard extends StatelessWidget {
                 if (application.jobUnavailable) ...[
                   const SizedBox(height: 5),
                   Text(
-                    'This job listing is no longer available.',
+                    '이 채용 공고는 더 이상 이용할 수 없습니다.',
                     style: Theme.of(context).textTheme.bodySmall
                         ?.copyWith(color: const Color(0xFF647369)),
                   ),
                 ],
                 const SizedBox(height: 12),
                 _ApplicationDetail(
-                  label: 'Applicant ID',
-                  value: application.applicantId,
+                  label: '지원자 ID',
+                  value: application.applicantId.isEmpty
+                      ? '지원자 정보 없음'
+                      : application.applicantId,
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
                       child: _ApplicationDetail(
-                        label: 'Status',
+                        label: '상태',
                         value: _formatStatus(application.status),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _ApplicationDetail(
-                        label: 'Date applied',
-                        value: dateText.replaceFirst('Submitted ', ''),
-                      ),
+                      child: _ApplicationDetail(label: '지원일', value: dateText),
                     ),
                   ],
                 ),
@@ -551,7 +546,7 @@ class _EmployerApplicationCard extends StatelessWidget {
                     key: ValueKey('chat-application-${application.id}'),
                     onPressed: onChat,
                     icon: const Icon(Icons.chat_bubble_outline_rounded),
-                    label: const Text('Chat'),
+                    label: const Text('채팅'),
                   ),
                 ],
                 if (application.status == 'pending' &&
@@ -567,7 +562,7 @@ class _EmployerApplicationCard extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                         const SizedBox(width: 8),
-                        const Expanded(child: Text('Saving decision...')),
+                        const Expanded(child: Text('처리 중…')),
                       ] else
                         const Spacer(),
                       OutlinedButton(
@@ -577,7 +572,7 @@ class _EmployerApplicationCard extends StatelessWidget {
                             : () => onDecision(
                                 EmployerApplicationDecision.rejected,
                               ),
-                        child: const Text('Reject'),
+                        child: const Text('거절'),
                       ),
                       const SizedBox(width: 8),
                       FilledButton(
@@ -587,7 +582,7 @@ class _EmployerApplicationCard extends StatelessWidget {
                             : () => onDecision(
                                 EmployerApplicationDecision.accepted,
                               ),
-                        child: const Text('Accept'),
+                        child: const Text('수락'),
                       ),
                     ],
                   ),
@@ -630,14 +625,12 @@ class _ApplicationDetail extends StatelessWidget {
   }
 }
 
-String _formatStatus(String status) => status
-    .replaceAll('_', ' ')
-    .split(' ')
-    .map(
-      (word) =>
-          word.isEmpty ? word : '${word[0].toUpperCase()}${word.substring(1)}',
-    )
-    .join(' ');
+String _formatStatus(String status) => switch (status) {
+  'pending' => '검토 중',
+  'accepted' => '수락',
+  'rejected' => '거절',
+  _ => '알 수 없음',
+};
 
 class _EmployerApplicationsState extends StatelessWidget {
   const _EmployerApplicationsState({
@@ -696,14 +689,14 @@ class _EmployerApplicationsState extends StatelessWidget {
 String _errorMessage(Object? error) {
   if (error is EmployerApplicationsException) return error.message;
   if (error is FirebaseException && error.code == 'permission-denied') {
-    return 'You do not have permission to view these applications. Verify your employer role and that the application access rules are deployed.';
+    return '지원서를 확인할 권한이 없습니다. 고용주 계정으로 로그인했는지, 지원서 조회 규칙이 배포되었는지 확인해 주세요.';
   }
   if (error is FirebaseException &&
       (error.code == 'unavailable' || error.code == 'network-request-failed')) {
-    return 'Check your internet connection and try again.';
+    return '인터넷 연결을 확인한 후 다시 시도해 주세요.';
   }
   if (error is FirebaseException) {
-    return 'A Firebase error occurred while loading applications. Please try again.';
+    return '지원서를 불러오지 못했습니다. 다시 시도해 주세요.';
   }
-  return 'Please try again. Your application records have not been changed.';
+  return '오류가 발생했습니다. 지원서 기록은 변경되지 않았습니다. 다시 시도해 주세요.';
 }

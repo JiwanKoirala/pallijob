@@ -26,7 +26,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Loading profile'), findsOneWidget);
+    expect(find.text('프로필을 불러오는 중'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
@@ -38,7 +38,7 @@ void main() {
 
     expect(find.text('Morgan Employer'), findsOneWidget);
     expect(find.text('morgan@example.com'), findsOneWidget);
-    expect(find.text('Employer'), findsOneWidget);
+    expect(find.text('고용주'), findsOneWidget);
     expect(find.byType(TextFormField), findsNWidgets(2));
     expect(
       tester
@@ -80,8 +80,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('save-employer-profile')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Company name is required.'), findsOneWidget);
-    expect(find.text('Contact information is required.'), findsOneWidget);
+    expect(find.text('회사명을 입력해 주세요.'), findsOneWidget);
+    expect(find.text('연락처를 입력해 주세요.'), findsOneWidget);
     expect(service.saveCalls, 0);
   });
 
@@ -109,8 +109,8 @@ void main() {
     expect(service.savedContactInfo, 'contact@example.com');
     expect(service.saveCalls, 1);
     expect(service.updatedFieldNames, {'companyName', 'contactInfo'});
-    expect(find.text('Profile updated successfully.'), findsOneWidget);
-    expect(find.text('Employer'), findsOneWidget);
+    expect(find.text('프로필이 수정되었습니다.'), findsOneWidget);
+    expect(find.text('고용주'), findsOneWidget);
   });
 
   testWidgets('shows a clear access error for a non-employer role', (
@@ -126,17 +126,17 @@ void main() {
     );
     load.completeError(
       const EmployerProfileException(
-        'Only employer accounts can view this profile.',
+        '고용주 계정만 이 프로필을 확인할 수 있습니다.',
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Could not load profile'), findsOneWidget);
+    expect(find.text('프로필을 불러오지 못했습니다'), findsOneWidget);
     expect(
-      find.text('Only employer accounts can view this profile.'),
+      find.text('고용주 계정만 이 프로필을 확인할 수 있습니다.'),
       findsOneWidget,
     );
-    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text('다시 시도'), findsOneWidget);
   });
 
   testWidgets('explains permission denied when saving', (tester) async {
@@ -159,7 +159,7 @@ void main() {
 
     expect(
       find.text(
-        'Firestore denied this update. Check that the rules allow employer profile fields.',
+        '프로필 수정 권한이 없습니다. Firestore 규칙에서 고용주 프로필 수정을 허용하는지 확인해 주세요.',
       ),
       findsOneWidget,
     );
@@ -170,11 +170,11 @@ void main() {
   ) async {
     await tester.pumpWidget(const MaterialApp(home: EmployerDashboardScreen()));
 
-    await tester.ensureVisible(find.text('My Profile'));
-    await tester.tap(find.text('My Profile'));
+    await tester.ensureVisible(find.text('내 프로필'));
+    await tester.tap(find.text('내 프로필'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Could not load profile'), findsOneWidget);
+    expect(find.text('프로필을 불러오지 못했습니다'), findsOneWidget);
   });
 }
 

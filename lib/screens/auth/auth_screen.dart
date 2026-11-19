@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:pallijob/l10n/role_aware_strings.dart';
 import 'package:pallijob/screens/employer/employer_dashboard_screen.dart';
 import 'package:pallijob/screens/student/student_dashboard_screen.dart';
 
@@ -29,6 +30,7 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isRepairingProfile = false;
 
   bool get _isStudent => widget.role == 'Student';
+  RoleAwareStrings get _strings => RoleAwareStrings(isEmployer: !_isStudent);
 
   @override
   void dispose() {
@@ -42,6 +44,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = RoleAwareStrings(isEmployer: !_isStudent);
     return Scaffold(
       backgroundColor: const Color(0xFFF8FBF8),
       appBar: AppBar(
@@ -78,11 +81,18 @@ class _AuthScreenState extends State<AuthScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          _isRepairingProfile
-                              ? 'Complete your profile'
-                              : _isRegistering
-                              ? 'Create your ${widget.role.toLowerCase()} account'
-                              : 'Welcome back',
+                          strings.text(
+                            english: _isRepairingProfile
+                                ? 'Complete your profile'
+                                : _isRegistering
+                                ? 'Create your ${widget.role.toLowerCase()} account'
+                                : 'Welcome back',
+                            korean: _isRepairingProfile
+                                ? '프로필을 완성해 주세요'
+                                : _isRegistering
+                                ? '고용주 계정 만들기'
+                                : '다시 오신 것을 환영합니다',
+                          ),
                           style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(
                                 color: const Color(0xFF173B27),
@@ -92,11 +102,18 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          _isRepairingProfile
-                              ? 'Your account is signed in. Add the details below to finish setting it up.'
-                              : _isRegistering
-                              ? 'A few details and you’re ready to get started.'
-                              : 'Log in to continue to PalliJob.',
+                          strings.text(
+                            english: _isRepairingProfile
+                                ? 'Your account is signed in. Add the details below to finish setting it up.'
+                                : _isRegistering
+                                ? 'A few details and you’re ready to get started.'
+                                : 'Log in to continue to PalliJob.',
+                            korean: _isRepairingProfile
+                                ? '아래 정보를 입력해 계정 설정을 완료해 주세요.'
+                                : _isRegistering
+                                ? '몇 가지 정보를 입력하고 PalliJob을 시작해 보세요.'
+                                : '로그인하여 PalliJob을 이용해 주세요.',
+                          ),
                           style: Theme.of(context).textTheme.bodyLarge
                               ?.copyWith(
                                 color: const Color(0xFF647369),
@@ -109,6 +126,14 @@ class _AuthScreenState extends State<AuthScreen> {
                             isRegistering: _isRegistering,
                             isEnabled: !_isLoading,
                             onChanged: _setMode,
+                            loginLabel: strings.text(
+                              english: 'Login',
+                              korean: '로그인',
+                            ),
+                            registerLabel: strings.text(
+                              english: 'Register',
+                              korean: '회원가입',
+                            ),
                           ),
                           const SizedBox(height: 24),
                         ],
@@ -116,36 +141,61 @@ class _AuthScreenState extends State<AuthScreen> {
                             _isStudent)
                           _textField(
                             controller: _fullNameController,
-                            label: 'Full name',
+                            label: strings.text(
+                              english: 'Full name',
+                              korean: '성함',
+                            ),
                             icon: Icons.person_outline,
                             textCapitalization: TextCapitalization.words,
-                            validator: (value) => _required(value, 'Full name'),
+                            validator: (value) => _required(
+                              value,
+                              strings.text(english: 'Full name', korean: '성함'),
+                            ),
                           ),
                         if ((_isRegistering || _isRepairingProfile) &&
                             !_isStudent) ...[
                           _textField(
                             controller: _businessNameController,
-                            label: 'Business name',
+                            label: strings.text(
+                              english: 'Business name',
+                              korean: '회사명',
+                            ),
                             icon: Icons.business_outlined,
                             textCapitalization: TextCapitalization.words,
-                            validator: (value) =>
-                                _required(value, 'Business name'),
+                            validator: (value) => _required(
+                              value,
+                              strings.text(
+                                english: 'Business name',
+                                korean: '회사명',
+                              ),
+                            ),
                           ),
                           const SizedBox(height: 16),
                           _textField(
                             controller: _fullNameController,
-                            label: 'Employer full name',
+                            label: strings.text(
+                              english: 'Employer full name',
+                              korean: '담당자 성함',
+                            ),
                             icon: Icons.person_outline,
                             textCapitalization: TextCapitalization.words,
-                            validator: (value) =>
-                                _required(value, 'Employer full name'),
+                            validator: (value) => _required(
+                              value,
+                              strings.text(
+                                english: 'Employer full name',
+                                korean: '담당자 성함',
+                              ),
+                            ),
                           ),
                         ],
                         if (!_isRepairingProfile) ...[
                           if (_isRegistering) const SizedBox(height: 16),
                           _textField(
                             controller: _emailController,
-                            label: 'Email',
+                            label: strings.text(
+                              english: 'Email',
+                              korean: '이메일',
+                            ),
                             icon: Icons.email_outlined,
                             keyboardType: TextInputType.emailAddress,
                             textCapitalization: TextCapitalization.none,
@@ -155,7 +205,10 @@ class _AuthScreenState extends State<AuthScreen> {
                           const SizedBox(height: 16),
                           _textField(
                             controller: _passwordController,
-                            label: 'Password',
+                            label: strings.text(
+                              english: 'Password',
+                              korean: '비밀번호',
+                            ),
                             icon: Icons.lock_outline,
                             obscureText: !_isPasswordVisible,
                             autofillHints: [
@@ -165,8 +218,14 @@ class _AuthScreenState extends State<AuthScreen> {
                             ],
                             suffixIcon: IconButton(
                               tooltip: _isPasswordVisible
-                                  ? 'Hide password'
-                                  : 'Show password',
+                                  ? strings.text(
+                                      english: 'Hide password',
+                                      korean: '비밀번호 숨기기',
+                                    )
+                                  : strings.text(
+                                      english: 'Show password',
+                                      korean: '비밀번호 표시',
+                                    ),
                               onPressed: () => setState(
                                 () => _isPasswordVisible = !_isPasswordVisible,
                               ),
@@ -182,14 +241,23 @@ class _AuthScreenState extends State<AuthScreen> {
                             const SizedBox(height: 16),
                             _textField(
                               controller: _confirmPasswordController,
-                              label: 'Confirm password',
+                              label: strings.text(
+                                english: 'Confirm password',
+                                korean: '비밀번호 확인',
+                              ),
                               icon: Icons.lock_outline,
                               obscureText: !_isConfirmPasswordVisible,
                               autofillHints: const [AutofillHints.newPassword],
                               suffixIcon: IconButton(
                                 tooltip: _isConfirmPasswordVisible
-                                    ? 'Hide password'
-                                    : 'Show password',
+                                    ? strings.text(
+                                        english: 'Hide password',
+                                        korean: '비밀번호 숨기기',
+                                      )
+                                    : strings.text(
+                                        english: 'Show password',
+                                        korean: '비밀번호 표시',
+                                      ),
                                 onPressed: () => setState(
                                   () => _isConfirmPasswordVisible =
                                       !_isConfirmPasswordVisible,
@@ -233,19 +301,35 @@ class _AuthScreenState extends State<AuthScreen> {
                                 : Text(
                                     _isRegistering
                                         ? _isRepairingProfile
-                                              ? 'Save profile'
-                                              : 'Create account'
-                                        : 'Log in',
+                                              ? strings.text(
+                                                  english: 'Save profile',
+                                                  korean: '프로필 저장',
+                                                )
+                                              : strings.text(
+                                                  english: 'Create account',
+                                                  korean: '계정 만들기',
+                                                )
+                                        : strings.text(
+                                            english: 'Log in',
+                                            korean: '로그인',
+                                          ),
                                   ),
                           ),
                         ),
                         const SizedBox(height: 18),
                         Text(
-                          _isRepairingProfile
-                              ? 'Your account is safe. You can retry saving your profile.'
-                              : _isRegistering
-                              ? 'By creating an account, you agree to use PalliJob responsibly.'
-                              : 'Use the email address linked to your account.',
+                          strings.text(
+                            english: _isRepairingProfile
+                                ? 'Your account is safe. You can retry saving your profile.'
+                                : _isRegistering
+                                ? 'By creating an account, you agree to use PalliJob responsibly.'
+                                : 'Use the email address linked to your account.',
+                            korean: _isRepairingProfile
+                                ? '계정은 안전합니다. 프로필 저장을 다시 시도할 수 있습니다.'
+                                : _isRegistering
+                                ? '계정을 만들면 PalliJob을 책임감 있게 이용하는 데 동의하게 됩니다.'
+                                : '계정에 등록된 이메일 주소를 입력해 주세요.',
+                          ),
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
@@ -309,36 +393,62 @@ class _AuthScreenState extends State<AuthScreen> {
 
   String? _required(String? value, String label) {
     if (value == null || value.trim().isEmpty) {
-      return '$label is required.';
+      final lastCharacter = label.runes.last;
+      final hasFinalConsonant =
+          lastCharacter >= 0xAC00 &&
+          lastCharacter <= 0xD7A3 &&
+          (lastCharacter - 0xAC00) % 28 != 0;
+      return _strings.text(
+        english: '$label is required.',
+        korean: '$label${hasFinalConsonant ? '은' : '는'} 필수 입력 항목입니다.',
+      );
     }
     return null;
   }
 
   String? _validateEmail(String? value) {
-    final requiredError = _required(value, 'Email');
+    final requiredError = _required(
+      value,
+      _strings.text(english: 'Email', korean: '이메일'),
+    );
     if (requiredError != null) return requiredError;
 
     final email = value!.trim();
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      return 'Enter a valid email address.';
+      return _strings.text(
+        english: 'Enter a valid email address.',
+        korean: '올바른 이메일 주소를 입력해 주세요.',
+      );
     }
     return null;
   }
 
   String? _validatePassword(String? value) {
-    final requiredError = _required(value, 'Password');
+    final requiredError = _required(
+      value,
+      _strings.text(english: 'Password', korean: '비밀번호'),
+    );
     if (requiredError != null) return requiredError;
     if (_isRegistering && value!.length < 6) {
-      return 'Password must be at least 6 characters.';
+      return _strings.text(
+        english: 'Password must be at least 6 characters.',
+        korean: '비밀번호는 6자 이상이어야 합니다.',
+      );
     }
     return null;
   }
 
   String? _validateConfirmPassword(String? value) {
-    final requiredError = _required(value, 'Confirm password');
+    final requiredError = _required(
+      value,
+      _strings.text(english: 'Confirm password', korean: '비밀번호 확인'),
+    );
     if (requiredError != null) return requiredError;
     if (value != _passwordController.text) {
-      return 'Passwords do not match.';
+      return _strings.text(
+        english: 'Passwords do not match.',
+        korean: '비밀번호가 일치하지 않습니다.',
+      );
     }
     return null;
   }
@@ -368,7 +478,11 @@ class _AuthScreenState extends State<AuthScreen> {
             _isRegistering = false;
           });
           _showMessage(
-            'Your session expired. Log in to continue profile setup.',
+            _strings.text(
+              english:
+                  'Your session expired. Log in to continue profile setup.',
+              korean: '로그인 세션이 만료되었습니다. 다시 로그인하여 프로필 설정을 완료해 주세요.',
+            ),
           );
           return;
         }
@@ -390,7 +504,10 @@ class _AuthScreenState extends State<AuthScreen> {
         final user = credential.user;
         if (user == null) {
           _showMessage(
-            'Your account was created, but could not be loaded. Log in to finish setting up your profile.',
+            _strings.text(
+              english: 'Your account was created, but could not be loaded. Log in to finish setting up your profile.',
+              korean: '계정이 생성되었지만 계정 정보를 불러오지 못했습니다. 다시 로그인하여 프로필 설정을 완료해 주세요.',
+            ),
           );
           return;
         }
@@ -401,7 +518,10 @@ class _AuthScreenState extends State<AuthScreen> {
           if (!mounted) return;
           setState(() => _isRepairingProfile = true);
           _showMessage(
-            'Your account was created, but its profile was not saved. You’re signed in; save your profile below to finish setup.',
+            _strings.text(
+              english: 'Your account was created, but its profile was not saved. You’re signed in; save your profile below to finish setup.',
+              korean: '계정은 생성되었지만 프로필을 저장하지 못했습니다. 로그인된 상태이므로 아래에서 프로필을 저장해 설정을 완료해 주세요.',
+            ),
           );
           return;
         }
@@ -417,7 +537,12 @@ class _AuthScreenState extends State<AuthScreen> {
       );
       final user = credential.user;
       if (user == null) {
-        _showMessage('We could not load your account. Please log in again.');
+        _showMessage(
+          _strings.text(
+            english: 'We could not load your account. Please log in again.',
+            korean: '계정 정보를 불러오지 못했습니다. 다시 로그인해 주세요.',
+          ),
+        );
         return;
       }
 
@@ -430,7 +555,10 @@ class _AuthScreenState extends State<AuthScreen> {
       } on FirebaseException {
         await auth.signOut();
         _showMessage(
-          'We could not verify your account role. You have been logged out; please try again later.',
+          _strings.text(
+            english: 'We could not verify your account role. You have been logged out; please try again later.',
+            korean: '계정 유형을 확인하지 못해 로그아웃되었습니다. 잠시 후 다시 시도해 주세요.',
+          ),
         );
         return;
       }
@@ -441,7 +569,10 @@ class _AuthScreenState extends State<AuthScreen> {
           _isRepairingProfile = true;
         });
         _showMessage(
-          'You’re logged in, but your profile is incomplete. Add your details below to finish setup.',
+          _strings.text(
+            english: 'You’re logged in, but your profile is incomplete. Add your details below to finish setup.',
+            korean: '로그인되었지만 프로필 설정이 완료되지 않았습니다. 아래 정보를 입력해 설정을 마무리해 주세요.',
+          ),
         );
         return;
       }
@@ -450,16 +581,27 @@ class _AuthScreenState extends State<AuthScreen> {
       final savedRole = profile.data()?['role'];
       if (savedRole != expectedRole) {
         await auth.signOut();
-        final selectedRole = _isStudent ? 'Student' : 'Employer';
+        final selectedRole = _strings.text(
+          english: _isStudent ? 'Student' : 'Employer',
+          korean: _isStudent ? 'Student' : '고용주',
+        );
         final savedRoleName = switch (savedRole) {
-          'student' => 'Student',
-          'employer' => 'Employer',
+          'student' => _strings.text(english: 'Student', korean: '학생'),
+          'employer' => _strings.text(english: 'Employer', korean: '고용주'),
           _ => null,
         };
         _showMessage(
           savedRoleName == null
-              ? 'This account has no valid role saved. You have been logged out; please contact support.'
-              : 'This account is registered as a $savedRoleName. You have been logged out; log in using the $savedRoleName option instead of $selectedRole.',
+              ? _strings.text(
+                  english: 'This account has no valid role saved. You have been logged out; please contact support.',
+                  korean: '계정 유형이 올바르지 않아 로그아웃되었습니다. 고객 지원에 문의해 주세요.',
+                )
+              : _strings.text(
+                  english:
+                      'This account is registered as a $savedRoleName. You have been logged out; log in using the $savedRoleName option instead of $selectedRole.',
+                  korean:
+                      '이 계정은 $savedRoleName 계정입니다. 로그아웃되었습니다. $selectedRole 옵션이 아닌 $savedRoleName 옵션으로 로그인해 주세요.',
+                ),
         );
         return;
       }
@@ -470,9 +612,14 @@ class _AuthScreenState extends State<AuthScreen> {
       _showMessage(_authErrorMessage(error));
     } on FirebaseException {
       _showMessage(
-        _isRepairingProfile
-            ? 'We could not save your profile. Your account is still available; check your connection and try again.'
-            : 'We could not complete your request. Please try again.',
+        _strings.text(
+          english: _isRepairingProfile
+              ? 'We could not save your profile. Your account is still available; check your connection and try again.'
+              : 'We could not complete your request. Please try again.',
+          korean: _isRepairingProfile
+              ? '프로필을 저장하지 못했지만 계정은 사용할 수 있습니다. 네트워크를 확인한 후 다시 시도해 주세요.'
+              : '요청을 완료하지 못했습니다. 다시 시도해 주세요.',
+        ),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -504,24 +651,20 @@ class _AuthScreenState extends State<AuthScreen> {
   void _showSuccess() {
     if (_isStudent) {
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute<void>(
-          builder: (_) => const StudentDashboardScreen(),
-        ),
+        MaterialPageRoute<void>(builder: (_) => const StudentDashboardScreen()),
         (_) => false,
       );
       return;
     }
 
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(
-        builder: (_) => const EmployerDashboardScreen(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const EmployerDashboardScreen()),
       (_) => false,
     );
   }
 
   String _authErrorMessage(FirebaseAuthException error) {
-    return switch (error.code) {
+    final english = switch (error.code) {
       'email-already-in-use' => 'An account with this email already exists.',
       'invalid-email' => 'Enter a valid email address.',
       'weak-password' =>
@@ -535,6 +678,21 @@ class _AuthScreenState extends State<AuthScreen> {
       _ =>
         'We could not ${_isRegistering ? 'create your account' : 'log you in'}. Please try again.',
     };
+    final korean = switch (error.code) {
+      'email-already-in-use' => '이미 사용 중인 이메일 주소입니다.',
+      'invalid-email' => '올바른 이메일 주소를 입력해 주세요.',
+      'weak-password' => '6자 이상의 안전한 비밀번호를 설정해 주세요.',
+      'user-not-found' ||
+      'wrong-password' ||
+      'invalid-credential' => '이메일 또는 비밀번호가 올바르지 않습니다.',
+      'network-request-failed' => '네트워크에 연결할 수 없습니다. 연결 상태를 확인해 주세요.',
+      'too-many-requests' => '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+      _ =>
+        _isRegistering
+            ? '계정을 만들지 못했습니다. 다시 시도해 주세요.'
+            : '로그인하지 못했습니다. 다시 시도해 주세요.',
+    };
+    return _strings.text(english: english, korean: korean);
   }
 
   void _showMessage(String message) {
@@ -550,11 +708,15 @@ class _ModeSelector extends StatelessWidget {
     required this.isRegistering,
     required this.isEnabled,
     required this.onChanged,
+    required this.loginLabel,
+    required this.registerLabel,
   });
 
   final bool isRegistering;
   final bool isEnabled;
   final ValueChanged<bool> onChanged;
+  final String loginLabel;
+  final String registerLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -565,7 +727,10 @@ class _ModeSelector extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
-        children: [_modeButton('Login', false), _modeButton('Register', true)],
+        children: [
+          _modeButton(loginLabel, false),
+          _modeButton(registerLabel, true),
+        ],
       ),
     );
   }

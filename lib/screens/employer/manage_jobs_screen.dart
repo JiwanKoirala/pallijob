@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:pallijob/l10n/role_aware_strings.dart';
 import 'package:pallijob/screens/employer/edit_job_screen.dart';
 import 'package:pallijob/screens/student/student_job_listings_screen.dart';
 
@@ -61,7 +62,7 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
       backgroundColor: const Color(0xFFF8FBF8),
       appBar: AppBar(
         title: const Text(
-          'Manage Jobs',
+          '채용 공고 관리',
           style: TextStyle(
             color: Color(0xFF173B27),
             fontWeight: FontWeight.w800,
@@ -74,8 +75,8 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
       body: _jobsStream == null
           ? const _ManageJobsState(
               icon: Icons.lock_outline_rounded,
-              title: 'Sign in to view your jobs',
-              message: 'Your posted jobs are available after you sign in.',
+              title: '로그인 후 공고를 확인할 수 있습니다',
+              message: '로그인하면 내가 등록한 채용 공고를 확인할 수 있습니다.',
             )
           : StreamBuilder<List<StudentJobListing>>(
               stream: _jobsStream,
@@ -83,15 +84,15 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
                 if (snapshot.hasError) {
                   return _ManageJobsState(
                     icon: Icons.cloud_off_outlined,
-                    title: 'Could not load your jobs',
+                    title: '공고를 불러오지 못했습니다',
                     message: _errorMessage(snapshot.error),
                   );
                 }
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const _ManageJobsState(
                     loading: true,
-                    title: 'Loading your jobs',
-                    message: 'Please wait while we load your listings.',
+                    title: '공고를 불러오는 중',
+                    message: '등록한 채용 공고를 불러오고 있습니다.',
                   );
                 }
 
@@ -99,8 +100,8 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
                 if (jobs.isEmpty) {
                   return const _ManageJobsState(
                     icon: Icons.work_outline_rounded,
-                    title: 'You have not posted any jobs yet',
-                    message: 'Jobs you post will appear here.',
+                    title: '아직 등록한 공고가 없습니다',
+                    message: '새 채용 공고를 등록하면 여기에 표시됩니다.',
                   );
                 }
 
@@ -128,7 +129,7 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
                               child: Align(
                                 alignment: Alignment.centerLeft,
                                 child: Text(
-                                  'Your job listings',
+                                  '내 채용 공고',
                                   style: Theme.of(context)
                                       .textTheme
                                       .headlineSmall
@@ -151,8 +152,10 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
                               job: job,
                               onTap: () => Navigator.of(context).push(
                                 MaterialPageRoute<void>(
-                                  builder: (_) =>
-                                      StudentJobDetailsScreen(job: job),
+                                  builder: (_) => StudentJobDetailsScreen(
+                                    job: job,
+                                    isEmployerView: true,
+                                  ),
                                 ),
                               ),
                               onEdit: () => Navigator.of(context).push(
@@ -176,14 +179,14 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
 
   String _errorMessage(Object? error) {
     if (error is FirebaseException && error.code == 'permission-denied') {
-      return 'You do not have permission to view your job listings. Check that you are signed in and the Firestore job read rules are deployed.';
+      return '공고를 확인할 권한이 없습니다. 고용주 계정으로 로그인했는지, Firestore 공고 조회 규칙이 배포되었는지 확인해 주세요.';
     }
     if (error is FirebaseException &&
         (error.code == 'unavailable' ||
             error.code == 'network-request-failed')) {
-      return 'Check your internet connection and try again.';
+      return '인터넷 연결을 확인한 후 다시 시도해 주세요.';
     }
-    return 'Something went wrong while loading your jobs. Please try again later.';
+    return '공고를 불러오는 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.';
   }
 
   Future<void> _confirmDeleteJob(StudentJobListing job) async {
@@ -192,15 +195,13 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete job?'),
-        content: Text(
-          'Are you sure you want to delete "${job.title}"? This cannot be undone.',
-        ),
+        title: const Text('공고를 삭제하시겠습니까?'),
+        content: Text('"${job.title}" 공고를 삭제하시겠습니까? 삭제한 공고는 복구할 수 없습니다.'),
         actions: [
           TextButton(
             key: ValueKey('cancel-delete-job-${job.id}'),
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: const Text('취소'),
           ),
           FilledButton(
             key: ValueKey('confirm-delete-job-${job.id}'),
@@ -209,7 +210,7 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
               backgroundColor: const Color(0xFF9B2C2C),
               foregroundColor: Colors.white,
             ),
-            child: const Text('Delete'),
+            child: const Text('삭제'),
           ),
         ],
       ),
@@ -231,10 +232,7 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
         final auth = FirebaseAuth.instance;
         final user = auth.currentUser;
         if (user == null) {
-          _showDeleteMessage(
-            'You must be signed in as the job owner to delete this job.',
-            isError: true,
-          );
+          _showDeleteMessage('공고 소유자 계정으로 로그인해 주세요.', isError: true);
           return;
         }
 
@@ -244,10 +242,7 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
             .get();
         if (!mounted) return;
         if (!profile.exists || profile.data()?['role'] != 'employer') {
-          _showDeleteMessage(
-            'Only employer accounts can delete jobs.',
-            isError: true,
-          );
+          _showDeleteMessage('고용주 계정만 공고를 삭제할 수 있습니다.', isError: true);
           return;
         }
 
@@ -257,22 +252,16 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
         final jobSnapshot = await jobReference.get();
         if (!mounted) return;
         if (!jobSnapshot.exists) {
-          _showDeleteMessage('This job no longer exists.', isError: true);
+          _showDeleteMessage('이 채용 공고는 더 이상 존재하지 않습니다.', isError: true);
           return;
         }
         if (jobSnapshot.data()?['employerId'] != user.uid ||
             job.employerId != user.uid) {
-          _showDeleteMessage(
-            'You can only delete jobs posted by your account.',
-            isError: true,
-          );
+          _showDeleteMessage('내 계정으로 등록한 공고만 삭제할 수 있습니다.', isError: true);
           return;
         }
         if (auth.currentUser?.uid != user.uid) {
-          _showDeleteMessage(
-            'Your session expired. Please sign in again.',
-            isError: true,
-          );
+          _showDeleteMessage('로그인 세션이 만료되었습니다. 다시 로그인해 주세요.', isError: true);
           return;
         }
 
@@ -280,16 +269,13 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
       }
 
       if (!mounted) return;
-      _showDeleteMessage('Job deleted successfully.', isError: false);
+      _showDeleteMessage('채용 공고가 삭제되었습니다.', isError: false);
     } on FirebaseException catch (error) {
       if (!mounted) return;
       _showDeleteMessage(_deleteErrorMessage(error), isError: true);
     } catch (_) {
       if (!mounted) return;
-      _showDeleteMessage(
-        'Could not delete the job. Please try again.',
-        isError: true,
-      );
+      _showDeleteMessage('공고를 삭제하지 못했습니다. 다시 시도해 주세요.', isError: true);
     } finally {
       if (mounted) setState(() => _deletingJobIds.remove(job.id));
     }
@@ -297,12 +283,12 @@ class _ManageJobsScreenState extends State<ManageJobsScreen> {
 
   String _deleteErrorMessage(FirebaseException error) {
     return switch (error.code) {
-      'permission-denied' => 'Firestore denied this deletion. Confirm you own this job, are signed in as an employer, and that the delete rules are deployed.',
-      'not-found' => 'This job no longer exists.',
+      'permission-denied' =>
+        '삭제 권한이 없습니다. 내 계정으로 등록한 공고인지, 공고 삭제 규칙이 배포되었는지 확인해 주세요.',
+      'not-found' => '이 채용 공고는 더 이상 존재하지 않습니다.',
       'unavailable' || 'network-request-failed' =>
-        'Could not reach Firebase. Check your connection and try again.',
-      _ =>
-        'Could not delete the job${error.message == null ? '.' : ': ${error.message}'}',
+        'Firebase에 연결할 수 없습니다. 네트워크를 확인한 후 다시 시도해 주세요.',
+      _ => '공고를 삭제하지 못했습니다. 다시 시도해 주세요.',
     };
   }
 
@@ -362,7 +348,10 @@ class _EmployerJobCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    job.workType ?? 'Work type not specified',
+                    job.workType == null
+                        ? '근무 형태 미지정'
+                        : const RoleAwareStrings(isEmployer: true)
+                              .workType(job.workType!),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: const Color(0xFF536359),
                       fontWeight: FontWeight.w600,
@@ -370,7 +359,10 @@ class _EmployerJobCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    job.schedule ?? 'Schedule not specified',
+                    job.schedule == null
+                        ? '근무 일정 미지정'
+                        : const RoleAwareStrings(isEmployer: true)
+                              .schedule(job.schedule!),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: const Color(0xFF536359),
                       fontWeight: FontWeight.w600,
@@ -419,7 +411,7 @@ class _EmployerJobCard extends StatelessWidget {
                   key: ValueKey('edit-job-${job.id}'),
                   onPressed: isDeleting ? null : onEdit,
                   icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Edit'),
+                  label: const Text('수정'),
                   style: TextButton.styleFrom(
                     foregroundColor: const Color(0xFF247545),
                   ),
@@ -434,7 +426,7 @@ class _EmployerJobCard extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.delete_outline_rounded),
-                  label: Text(isDeleting ? 'Deleting…' : 'Delete'),
+                  label: Text(isDeleting ? '삭제 중…' : '삭제'),
                   style: TextButton.styleFrom(
                     foregroundColor: const Color(0xFF9B2C2C),
                   ),
