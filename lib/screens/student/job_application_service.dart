@@ -104,6 +104,7 @@ class FirestoreJobApplicationService implements JobApplicationService {
         'jobId': jobId,
         'studentId': user.uid,
         'employerId': employerId,
+        'verifiedEmployerId': employerId,
         'status': 'pending',
         'dateApplied': FieldValue.serverTimestamp(),
         if (applicantName.isNotEmpty && applicantName.runes.length <= 100)

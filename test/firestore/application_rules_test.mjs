@@ -9,6 +9,7 @@ import {
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -644,6 +645,15 @@ try {
     status: 'pending',
     dateApplied: serverTimestamp(),
   }));
+  const olderClientApplication = doc(employerA, 'applications/job-a_student-new');
+  assert.equal(
+    (await assertSucceeds(getDoc(olderClientApplication))).data().verifiedEmployerId,
+    undefined,
+  );
+  await assertFails(updateDoc(olderClientApplication, {
+    status: 'accepted',
+    verifiedEmployerId: 'employer-a',
+  }));
   await assertFails(
     setDoc(
       doc(
@@ -686,6 +696,17 @@ try {
     status: 'pending',
     dateApplied: serverTimestamp(),
   };
+  for (const verifiedEmployerId of [null, 42, '', 'employer-b']) {
+    await assertFails(setDoc(atomicApplication, {
+      ...atomicApplicationData,
+      verifiedEmployerId,
+    }));
+  }
+  await assertFails(setDoc(atomicApplication, {
+    ...atomicApplicationData,
+    employerId: 'employer-b',
+    verifiedEmployerId: 'employer-b',
+  }));
   await assertSucceeds(getDoc(doc(studentAtomic, 'users/student-atomic')));
   await assertFails(getDoc(doc(employerA, 'users/student-atomic')));
   await assertFails(getDocs(collection(employerA, 'users')));
@@ -710,6 +731,7 @@ try {
   newApplicationBatch.set(atomicApplication, {
     ...atomicApplicationData,
     applicantName: '김민지',
+    verifiedEmployerId: 'employer-a',
   });
   newApplicationBatch.set(
     doc(
@@ -726,8 +748,19 @@ try {
   );
   await assertSucceeds(newApplicationBatch.commit());
   const namedApplication = doc(employerA, 'applications/job-a_student-atomic');
-  assert.equal((await assertSucceeds(getDoc(namedApplication))).data().applicantName, '김민지');
+  const namedApplicationData = (await assertSucceeds(getDoc(namedApplication))).data();
+  assert.equal(namedApplicationData.applicantName, '김민지');
+  assert.equal(namedApplicationData.verifiedEmployerId, 'employer-a');
   await assertFails(getDoc(doc(employerB, 'applications/job-a_student-atomic')));
+  await assertFails(updateDoc(atomicApplication, {
+    verifiedEmployerId: 'employer-b',
+  }));
+  for (const verifiedEmployerId of ['employer-b', deleteField()]) {
+    await assertFails(updateDoc(namedApplication, {
+      status: 'accepted',
+      verifiedEmployerId,
+    }));
+  }
   await assertFails(updateDoc(atomicApplication, { applicantName: '다른 이름' }));
   await assertFails(updateDoc(namedApplication, {
     status: 'accepted',
@@ -933,6 +966,10 @@ try {
     },
   );
   await assertSucceeds(acceptedBatch.commit());
+  assert.equal(
+    (await assertSucceeds(getDoc(namedApplication))).data().verifiedEmployerId,
+    'employer-a',
+  );
 
   const rejectedBatch = writeBatch(employerB);
   rejectedBatch.update(doc(employerB, 'applications/job-b_student-b'), {
@@ -1039,6 +1076,13 @@ try {
     new Date('2026-11-01T00:00:00Z').getTime(),
   );
 
+  await assertSucceeds(deleteDoc(doc(employerA, 'jobs/job-a')));
+  assert.equal(
+    (await assertSucceeds(getDoc(namedApplication))).data().verifiedEmployerId,
+    'employer-a',
+  );
+  await assertFails(getDoc(doc(employerB, 'applications/job-a_student-atomic')));
+
   console.log('PASS Employer A can list only applications owned by Employer A');
   console.log('PASS job work types and schedules are optional for legacy writes and validated for authorized employer writes');
   console.log('PASS Employer B cannot read Employer A applications');
@@ -1058,6 +1102,7 @@ try {
   console.log('PASS chat messages enforce participant identity, schema, and immutability');
   console.log('PASS deleted applications and missing jobs deny chat access');
   console.log('PASS legacy applications without employerId use the owning job safely');
+  console.log('PASS optional verifiedEmployerId is bound to the job owner, immutable, and retained after job deletion');
 } finally {
   await environment.cleanup();
 }

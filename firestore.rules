@@ -354,7 +354,8 @@ service cloud.firestore {
           'employerId',
           'status',
           'dateApplied',
-          'applicantName'
+          'applicantName',
+          'verifiedEmployerId'
         ])
         && validApplicantNameIfProvided()
         && request.resource.data.jobId is string
@@ -364,6 +365,10 @@ service cloud.firestore {
         && request.resource.data.employerId is string
         && request.resource.data.employerId ==
            get(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.employerId
+        // The existing employerId check above binds this optional snapshot to the job owner.
+        && (!('verifiedEmployerId' in request.resource.data)
+          || (request.resource.data.verifiedEmployerId == request.resource.data.employerId
+            && request.resource.data.employerId.size() > 0))
         && request.resource.data.status == 'pending'
         && request.resource.data.dateApplied == request.time
         && applicationId == request.resource.data.jobId + '_' + request.auth.uid
