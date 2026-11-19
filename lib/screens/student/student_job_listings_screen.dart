@@ -1,21 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:pallijob/screens/student/job_application_service.dart';
+import 'package:pallijob/screens/student/student_job_matching.dart';
 import 'package:pallijob/screens/student/job_translation_service.dart';
 import 'package:pallijob/screens/student/student_visa_eligibility_screen.dart';
-
-const jobWorkTypes = <String>['Part-time', 'Full-time', 'Temporary/Contract'];
-const jobSchedules = <String>['Weekdays', 'Weekends', 'Flexible'];
 
 class StudentJobListingsScreen extends StatefulWidget {
   const StudentJobListingsScreen({
     super.key,
     this.jobsStream,
     this.applicationService = const FirestoreJobApplicationService(),
+    this.preferencesService = const FirestoreStudentJobPreferencesService(),
   });
 
   final Stream<List<StudentJobListing>>? jobsStream;
   final JobApplicationService applicationService;
+  final StudentJobPreferencesService preferencesService;
 
   @override
   State<StudentJobListingsScreen> createState() =>
@@ -25,6 +25,7 @@ class StudentJobListingsScreen extends StatefulWidget {
 class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
   late final Stream<List<StudentJobListing>> _jobsStream =
       widget.jobsStream ?? _watchJobs();
+  late final Future<StudentJobPreferences> _preferencesFuture;
   final _searchController = TextEditingController();
 
   static const _allLocations = 'All Locations';
@@ -35,6 +36,30 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
   String _selectedLocation = _allLocations;
   String _selectedWorkType = _allWorkTypes;
   String _selectedSchedule = _allSchedules;
+  StudentJobPreferences? _savedPreferences;
+  StudentJobPreferences? _editedPreferences;
+  Object? _preferencesLoadError;
+  bool _isSavingPreferences = false;
+  String? _preferencesSaveError;
+
+  @override
+  void initState() {
+    super.initState();
+    _preferencesFuture = widget.preferencesService.loadPreferences();
+    _preferencesFuture.then<void>(
+      (preferences) {
+        if (mounted) {
+          setState(() {
+            _savedPreferences = preferences;
+            _preferencesLoadError = null;
+          });
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (mounted) setState(() => _preferencesLoadError = error);
+      },
+    );
+  }
 
   @override
   void dispose() {
@@ -138,7 +163,22 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
                         matchesWorkType &&
                         matchesSchedule;
                   })
-                  .toList(growable: false);
+                  .toList(growable: true);
+              final savedPreferences = _savedPreferences;
+              if (savedPreferences != null && !savedPreferences.isEmpty) {
+                final indexedJobs = filteredJobs.indexed.toList();
+                indexedJobs.sort((first, second) {
+                  final scoreDifference =
+                      _matchCount(second.$2, savedPreferences) -
+                      _matchCount(first.$2, savedPreferences);
+                  return scoreDifference != 0
+                      ? scoreDifference
+                      : first.$1.compareTo(second.$1);
+                });
+                filteredJobs
+                  ..clear()
+                  ..addAll(indexedJobs.map((entry) => entry.$2));
+              }
 
               return ListView.separated(
                 padding: EdgeInsets.fromLTRB(
@@ -167,6 +207,8 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
                                     letterSpacing: -0.5,
                                   ),
                             ),
+                            const SizedBox(height: 12),
+                            _matchingPreferencesPanel(locations),
                             const SizedBox(height: 16),
                             TextField(
                               key: const ValueKey('job-search-field'),
@@ -354,6 +396,11 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
                       constraints: const BoxConstraints(maxWidth: 480),
                       child: _JobCard(
                         job: job,
+                        matchCount:
+                            savedPreferences == null || savedPreferences.isEmpty
+                            ? null
+                            : _matchCount(job, savedPreferences),
+                        preferenceCount: savedPreferences?.selectedCount ?? 0,
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => StudentJobDetailsScreen(
@@ -381,9 +428,262 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
       if (location.isEmpty || location == 'Not provided') continue;
       locationsByKey.putIfAbsent(location.toLowerCase(), () => location);
     }
-
     final locations = locationsByKey.values.toList()..sort();
     return locations;
+  }
+
+  Widget _matchingPreferencesPanel(List<String> locations) {
+    return FutureBuilder<StudentJobPreferences>(
+      future: _preferencesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Card(
+            color: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Color(0xFFE5EEE7)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Text(
+                _preferencesErrorMessage(
+                  snapshot.error ?? _preferencesLoadError,
+                ),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: const Color(0xFF9B2C2C)),
+              ),
+            ),
+          );
+        }
+        if (!snapshot.hasData) {
+          return const LinearProgressIndicator(
+            color: Color(0xFF247545),
+            minHeight: 2,
+          );
+        }
+
+        final preferences =
+            _editedPreferences ?? _savedPreferences ?? snapshot.data!;
+        final locationOptions = <String>[
+          ...locations,
+          if (preferences.preferredLocation != null &&
+              !locations.any(
+                (location) =>
+                    location.toLowerCase() ==
+                    preferences.preferredLocation!.toLowerCase(),
+              ))
+            preferences.preferredLocation!,
+        ];
+        return Card(
+          color: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFFE5EEE7)),
+          ),
+          child: ExpansionTile(
+            key: const ValueKey('job-matching-preferences'),
+            leading: const Icon(Icons.tune_rounded, color: Color(0xFF247545)),
+            title: const Text('Matching preferences'),
+            subtitle: Text(
+              preferences.isEmpty
+                  ? 'Optional — no preferences selected'
+                  : '${preferences.selectedCount} of 3 preferences selected',
+            ),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Preference matches are informational only and do not determine legal work eligibility.',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: const Color(0xFF647369)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String?>(
+                key: const ValueKey('preferred-job-location'),
+                initialValue: preferences.preferredLocation,
+                decoration: const InputDecoration(
+                  labelText: 'Preferred location',
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('No preference'),
+                  ),
+                  ...locationOptions.map(
+                    (location) => DropdownMenuItem<String?>(
+                      value: location,
+                      child: Text(location),
+                    ),
+                  ),
+                ],
+                onChanged: _isSavingPreferences
+                    ? null
+                    : (value) => _editPreferences(
+                        preferences,
+                        preferredLocation: value,
+                        clearLocation: value == null,
+                      ),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String?>(
+                key: const ValueKey('preferred-job-work-type'),
+                initialValue: preferences.preferredWorkType,
+                decoration: const InputDecoration(
+                  labelText: 'Preferred work type',
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('No preference'),
+                  ),
+                  ...jobWorkTypes.map(
+                    (value) => DropdownMenuItem<String?>(
+                      value: value,
+                      child: Text(value),
+                    ),
+                  ),
+                ],
+                onChanged: _isSavingPreferences
+                    ? null
+                    : (value) => _editPreferences(
+                        preferences,
+                        preferredWorkType: value,
+                        clearWorkType: value == null,
+                      ),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String?>(
+                key: const ValueKey('preferred-job-schedule'),
+                initialValue: preferences.preferredSchedule,
+                decoration: const InputDecoration(
+                  labelText: 'Preferred schedule',
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('No preference'),
+                  ),
+                  ...jobSchedules.map(
+                    (value) => DropdownMenuItem<String?>(
+                      value: value,
+                      child: Text(value),
+                    ),
+                  ),
+                ],
+                onChanged: _isSavingPreferences
+                    ? null
+                    : (value) => _editPreferences(
+                        preferences,
+                        preferredSchedule: value,
+                        clearSchedule: value == null,
+                      ),
+              ),
+              if (_preferencesSaveError != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _preferencesSaveError!,
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: const Color(0xFF9B2C2C)),
+                ),
+              ],
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  key: const ValueKey('save-job-preferences'),
+                  onPressed: _isSavingPreferences || _editedPreferences == null
+                      ? null
+                      : () => _savePreferences(_editedPreferences!),
+                  child: _isSavingPreferences
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Save Preferences'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _editPreferences(
+    StudentJobPreferences current, {
+    String? preferredLocation,
+    String? preferredWorkType,
+    String? preferredSchedule,
+    bool clearLocation = false,
+    bool clearWorkType = false,
+    bool clearSchedule = false,
+  }) {
+    setState(() {
+      _editedPreferences = StudentJobPreferences(
+        preferredLocation: clearLocation
+            ? null
+            : preferredLocation ?? current.preferredLocation,
+        preferredWorkType: clearWorkType
+            ? null
+            : preferredWorkType ?? current.preferredWorkType,
+        preferredSchedule: clearSchedule
+            ? null
+            : preferredSchedule ?? current.preferredSchedule,
+      );
+      _preferencesSaveError = null;
+    });
+  }
+
+  Future<void> _savePreferences(StudentJobPreferences preferences) async {
+    setState(() {
+      _isSavingPreferences = true;
+      _preferencesSaveError = null;
+    });
+    try {
+      await widget.preferencesService.savePreferences(preferences);
+      if (!mounted) return;
+      setState(() {
+        _savedPreferences = preferences;
+        _editedPreferences = null;
+        _isSavingPreferences = false;
+      });
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Matching preferences saved.')),
+        );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _preferencesSaveError = _preferencesErrorMessage(error);
+        _isSavingPreferences = false;
+      });
+    }
+  }
+
+  int _matchCount(StudentJobListing job, StudentJobPreferences preferences) {
+    return countPreferenceMatches(
+      preferences: preferences,
+      location: job.location,
+      workType: job.workType,
+      schedule: job.schedule,
+    );
+  }
+
+  String _preferencesErrorMessage(Object? error) {
+    if (error is StudentJobPreferencesException) return error.message;
+    if (error is FirebaseException && error.code == 'permission-denied') {
+      return 'Firestore denied access to matching preferences. Check your student profile rules.';
+    }
+    return 'Could not load or save matching preferences. Please try again.';
   }
 
   void _clearFilters() {
@@ -995,10 +1295,17 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
 }
 
 class _JobCard extends StatelessWidget {
-  const _JobCard({required this.job, required this.onTap});
+  const _JobCard({
+    required this.job,
+    required this.onTap,
+    this.matchCount,
+    this.preferenceCount = 0,
+  });
 
   final StudentJobListing job;
   final VoidCallback onTap;
+  final int? matchCount;
+  final int preferenceCount;
 
   @override
   Widget build(BuildContext context) {
@@ -1024,6 +1331,26 @@ class _JobCard extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              if (matchCount != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF4ED),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Matches $matchCount of $preferenceCount preferences',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: const Color(0xFF247545),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 6),
               Text(
                 job.workType ?? 'Work type not specified',

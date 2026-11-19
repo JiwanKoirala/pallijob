@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pallijob/screens/student/job_application_service.dart';
+import 'package:pallijob/screens/student/student_job_matching.dart';
 import 'package:pallijob/screens/student/student_job_listings_screen.dart';
 
 const job = StudentJobListing(
@@ -58,7 +59,10 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: StudentJobListingsScreen(jobsStream: controller.stream),
+        home: StudentJobListingsScreen(
+          jobsStream: controller.stream,
+          preferencesService: _FakeStudentJobPreferencesService(),
+        ),
       ),
     );
 
@@ -71,6 +75,7 @@ void main() {
       MaterialApp(
         home: StudentJobListingsScreen(
           jobsStream: Stream.value(const <StudentJobListing>[]),
+          preferencesService: _FakeStudentJobPreferencesService(),
         ),
       ),
     );
@@ -85,6 +90,7 @@ void main() {
         home: StudentJobListingsScreen(
           jobsStream: Stream.value(const [job]),
           applicationService: _FakeJobApplicationService(),
+          preferencesService: _FakeStudentJobPreferencesService(),
         ),
       ),
     );
@@ -121,6 +127,7 @@ void main() {
       MaterialApp(
         home: StudentJobListingsScreen(
           jobsStream: Stream.error(permissionError),
+          preferencesService: _FakeStudentJobPreferencesService(),
         ),
       ),
     );
@@ -135,7 +142,10 @@ void main() {
     (tester) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: StudentJobListingsScreen(jobsStream: Stream.value(testJobs)),
+          home: StudentJobListingsScreen(
+            jobsStream: Stream.value(testJobs),
+            preferencesService: _FakeStudentJobPreferencesService(),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -165,7 +175,10 @@ void main() {
   testWidgets('filters jobs by selected location', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: StudentJobListingsScreen(jobsStream: Stream.value(testJobs)),
+        home: StudentJobListingsScreen(
+          jobsStream: Stream.value(testJobs),
+          preferencesService: _FakeStudentJobPreferencesService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -185,7 +198,10 @@ void main() {
   testWidgets('filters jobs by selected work type', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: StudentJobListingsScreen(jobsStream: Stream.value(testJobs)),
+        home: StudentJobListingsScreen(
+          jobsStream: Stream.value(testJobs),
+          preferencesService: _FakeStudentJobPreferencesService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -203,7 +219,10 @@ void main() {
   testWidgets('legacy jobs remain visible under All Types', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: StudentJobListingsScreen(jobsStream: Stream.value([thirdJob])),
+        home: StudentJobListingsScreen(
+          jobsStream: Stream.value([thirdJob]),
+          preferencesService: _FakeStudentJobPreferencesService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -217,7 +236,10 @@ void main() {
   testWidgets('filters jobs by all advertised schedule values', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: StudentJobListingsScreen(jobsStream: Stream.value(testJobs)),
+        home: StudentJobListingsScreen(
+          jobsStream: Stream.value(testJobs),
+          preferencesService: _FakeStudentJobPreferencesService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -252,7 +274,10 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: StudentJobListingsScreen(jobsStream: Stream.value(testJobs)),
+        home: StudentJobListingsScreen(
+          jobsStream: Stream.value(testJobs),
+          preferencesService: _FakeStudentJobPreferencesService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -283,7 +308,10 @@ void main() {
   testWidgets('combines search and location filters', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: StudentJobListingsScreen(jobsStream: Stream.value(testJobs)),
+        home: StudentJobListingsScreen(
+          jobsStream: Stream.value(testJobs),
+          preferencesService: _FakeStudentJobPreferencesService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -306,7 +334,10 @@ void main() {
   testWidgets('clears search and location filters', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: StudentJobListingsScreen(jobsStream: Stream.value(testJobs)),
+        home: StudentJobListingsScreen(
+          jobsStream: Stream.value(testJobs),
+          preferencesService: _FakeStudentJobPreferencesService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -341,6 +372,178 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Delivery Driver'), findsOneWidget);
+  });
+
+  testWidgets('saves and edits optional job matching preferences', (
+    tester,
+  ) async {
+    final service = _FakeStudentJobPreferencesService();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StudentJobListingsScreen(
+          jobsStream: Stream.value(testJobs),
+          preferencesService: service,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('job-matching-preferences')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('preferred-job-location')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Busan').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('preferred-job-work-type')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Full-time').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('preferred-job-schedule')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Weekends').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('save-job-preferences')),
+    );
+    await tester.tap(find.byKey(const ValueKey('save-job-preferences')));
+    await tester.pumpAndSettle();
+
+    expect(service.savedPreferences?.preferredLocation, 'Busan');
+    expect(service.savedPreferences?.preferredWorkType, 'Full-time');
+    expect(service.savedPreferences?.preferredSchedule, 'Weekends');
+    expect(find.text('Matching preferences saved.'), findsOneWidget);
+    expect(find.text('Matches 3 of 3 preferences'), findsOneWidget);
+
+    await tester.drag(find.byType(ListView).first, const Offset(0, 160));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('preferred-job-work-type')),
+    );
+    await tester.tap(find.byKey(const ValueKey('preferred-job-work-type')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Part-time').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('save-job-preferences')),
+    );
+    await tester.tap(find.byKey(const ValueKey('save-job-preferences')));
+    await tester.pumpAndSettle();
+
+    expect(service.savedPreferences?.preferredWorkType, 'Part-time');
+    expect(service.saveCalls, 2);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StudentJobListingsScreen(
+          jobsStream: Stream.value(testJobs),
+          preferencesService: service,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('job-matching-preferences')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<DropdownButtonFormField<String?>>(
+            find.byKey(const ValueKey('preferred-job-location')),
+          )
+          .initialValue,
+      'Busan',
+    );
+    expect(
+      tester
+          .widget<DropdownButtonFormField<String?>>(
+            find.byKey(const ValueKey('preferred-job-work-type')),
+          )
+          .initialValue,
+      'Part-time',
+    );
+    expect(
+      tester
+          .widget<DropdownButtonFormField<String?>>(
+            find.byKey(const ValueKey('preferred-job-schedule')),
+          )
+          .initialValue,
+      'Weekends',
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('preferred-job-location')),
+    );
+    await tester.tap(find.byKey(const ValueKey('preferred-job-location')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('No preference').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('save-job-preferences')),
+    );
+    await tester.tap(find.byKey(const ValueKey('save-job-preferences')));
+    await tester.pumpAndSettle();
+
+    expect(service.savedPreferences?.preferredLocation, isNull);
+    expect(service.savedPreferences?.preferredWorkType, 'Part-time');
+    expect(service.savedPreferences?.preferredSchedule, 'Weekends');
+  });
+
+  testWidgets(
+    'no saved preferences preserve listing order and omit indicators',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StudentJobListingsScreen(
+            jobsStream: Stream.value(testJobs),
+            preferencesService: _FakeStudentJobPreferencesService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Optional — no preferences selected'), findsOneWidget);
+      expect(find.textContaining('Matches '), findsNothing);
+      expect(find.text('Cafe Assistant'), findsOneWidget);
+    },
+  );
+
+  testWidgets('manual filters are preserved and matches sort visible jobs', (
+    tester,
+  ) async {
+    final service = _FakeStudentJobPreferencesService(
+      initialPreferences: const StudentJobPreferences(
+        preferredLocation: 'Busan',
+        preferredWorkType: 'Full-time',
+        preferredSchedule: 'Weekends',
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StudentJobListingsScreen(
+          jobsStream: Stream.value(testJobs),
+          preferencesService: service,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('job-location-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Busan').last);
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).first, const Offset(0, -1800));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cafe Assistant'), findsNothing);
+    expect(find.text('Shop Assistant'), findsOneWidget);
+    expect(find.text('Delivery Driver'), findsOneWidget);
+    expect(find.text('Temporary Cleaner'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Shop Assistant')).dy,
+      lessThan(tester.getTopLeft(find.text('Delivery Driver')).dy),
+    );
+    expect(find.text('Matches 3 of 3 preferences'), findsOneWidget);
+    expect(find.text('Matches 1 of 3 preferences'), findsWidgets);
   });
 
   testWidgets('student can cancel application confirmation', (tester) async {
@@ -481,5 +684,26 @@ class _FakeJobApplicationService implements JobApplicationService {
   Future<void> apply(String jobId) async {
     applyCalls++;
     await onApply?.call(jobId);
+  }
+}
+
+class _FakeStudentJobPreferencesService
+    implements StudentJobPreferencesService {
+  _FakeStudentJobPreferencesService({
+    this.initialPreferences = const StudentJobPreferences(),
+  });
+
+  final StudentJobPreferences initialPreferences;
+  StudentJobPreferences? savedPreferences;
+  int saveCalls = 0;
+
+  @override
+  Future<StudentJobPreferences> loadPreferences() async =>
+      savedPreferences ?? initialPreferences;
+
+  @override
+  Future<void> savePreferences(StudentJobPreferences preferences) async {
+    saveCalls++;
+    savedPreferences = preferences;
   }
 }

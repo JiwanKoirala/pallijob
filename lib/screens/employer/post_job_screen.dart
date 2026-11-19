@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:pallijob/screens/student/student_job_listings_screen.dart';
+import 'package:pallijob/screens/student/student_job_matching.dart';
 
 class PostJobScreen extends StatefulWidget {
   const PostJobScreen({super.key});
