@@ -151,10 +151,16 @@ try {
       employerId: 'employer-a',
       createdAt: serverTimestamp(),
       workType: 'Part-time',
+      schedule: 'Weekdays',
     }),
   );
   await assertSucceeds(
     updateDoc(typedJobWrite, { workType: 'Temporary/Contract' }),
+  );
+  await assertSucceeds(updateDoc(typedJobWrite, { schedule: 'Weekends' }));
+  await assertSucceeds(updateDoc(typedJobWrite, { schedule: 'Flexible' }));
+  await assertFails(
+    updateDoc(typedJobWrite, { schedule: 'Overnight/Unlisted' }),
   );
   await assertFails(
     updateDoc(typedJobWrite, { workType: 'Seasonal/Unlisted' }),
@@ -162,6 +168,11 @@ try {
   await assertFails(
     updateDoc(doc(employerB, 'jobs/typed-job-write'), {
       workType: 'Full-time',
+    }),
+  );
+  await assertFails(
+    updateDoc(doc(employerB, 'jobs/typed-job-write'), {
+      schedule: 'Weekdays',
     }),
   );
   await assertFails(
@@ -173,6 +184,17 @@ try {
       employerId: 'employer-a',
       createdAt: serverTimestamp(),
       workType: 'Seasonal/Unlisted',
+    }),
+  );
+  await assertFails(
+    setDoc(doc(employerA, 'jobs/forged-schedule'), {
+      title: 'Invalid schedule',
+      description: 'Must use a supported value.',
+      location: 'Seoul',
+      requirements: 'Experience preferred.',
+      employerId: 'employer-a',
+      createdAt: serverTimestamp(),
+      schedule: 'Overnight/Unlisted',
     }),
   );
 
@@ -979,7 +1001,7 @@ try {
   );
 
   console.log('PASS Employer A can list only applications owned by Employer A');
-  console.log('PASS job work types are optional for legacy writes and validated for authorized employer writes');
+  console.log('PASS job work types and schedules are optional for legacy writes and validated for authorized employer writes');
   console.log('PASS Employer B cannot read Employer A applications');
   console.log('PASS unrelated students and signed-out users cannot list others’ applications');
   console.log('PASS students retain own-application reads');

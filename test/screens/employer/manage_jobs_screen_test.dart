@@ -60,6 +60,7 @@ void main() {
     expect(find.text('Cafe Assistant'), findsOneWidget);
     expect(find.text('Seoul'), findsOneWidget);
     expect(find.text('Work type not specified'), findsOneWidget);
+    expect(find.text('Schedule not specified'), findsOneWidget);
     expect(
       find.text('Help prepare drinks and serve customers.'),
       findsOneWidget,
@@ -121,7 +122,7 @@ void main() {
           .text,
       'Friendly and reliable.',
     );
-    expect(find.text('Not specified'), findsOneWidget);
+    expect(find.text('Not specified'), findsNWidgets(2));
 
     await tester.ensureVisible(
       find.byKey(const ValueKey('edit-job-work-type')),
@@ -131,6 +132,13 @@ void main() {
     await tester.tap(find.text('Part-time').last);
     await tester.pumpAndSettle();
     expect(find.text('Part-time'), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('edit-job-schedule')));
+    await tester.tap(find.byKey(const ValueKey('edit-job-schedule')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Weekends').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Weekends'), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const ValueKey('edit-job-job-title')),

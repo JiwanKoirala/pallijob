@@ -28,6 +28,9 @@ class _EditJobScreenState extends State<EditJobScreen> {
   late String? _selectedWorkType = jobWorkTypes.contains(widget.job.workType)
       ? widget.job.workType
       : null;
+  late String? _selectedSchedule = jobSchedules.contains(widget.job.schedule)
+      ? widget.job.schedule
+      : null;
   bool _isLoading = false;
 
   @override
@@ -145,6 +148,31 @@ class _EditJobScreenState extends State<EditJobScreen> {
                               ? null
                               : (value) =>
                                     setState(() => _selectedWorkType = value),
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String?>(
+                          key: const ValueKey('edit-job-schedule'),
+                          initialValue: _selectedSchedule,
+                          decoration: const InputDecoration(
+                            labelText: 'Schedule (optional)',
+                            prefixIcon: Icon(Icons.calendar_today_outlined),
+                          ),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('Not specified'),
+                            ),
+                            ...jobSchedules.map(
+                              (schedule) => DropdownMenuItem<String?>(
+                                value: schedule,
+                                child: Text(schedule),
+                              ),
+                            ),
+                          ],
+                          onChanged: _isLoading
+                              ? null
+                              : (value) =>
+                                    setState(() => _selectedSchedule = value),
                         ),
                         const SizedBox(height: 24),
                         SizedBox(
@@ -265,6 +293,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
         'location': _locationController.text.trim(),
         'requirements': _requirementsController.text.trim(),
         'workType': _selectedWorkType ?? FieldValue.delete(),
+        'schedule': _selectedSchedule ?? FieldValue.delete(),
       });
 
       if (!mounted) return;

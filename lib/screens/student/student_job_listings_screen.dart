@@ -5,6 +5,7 @@ import 'package:pallijob/screens/student/job_translation_service.dart';
 import 'package:pallijob/screens/student/student_visa_eligibility_screen.dart';
 
 const jobWorkTypes = <String>['Part-time', 'Full-time', 'Temporary/Contract'];
+const jobSchedules = <String>['Weekdays', 'Weekends', 'Flexible'];
 
 class StudentJobListingsScreen extends StatefulWidget {
   const StudentJobListingsScreen({
@@ -28,10 +29,12 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
 
   static const _allLocations = 'All Locations';
   static const _allWorkTypes = 'All Types';
+  static const _allSchedules = 'All Schedules';
 
   String _searchQuery = '';
   String _selectedLocation = _allLocations;
   String _selectedWorkType = _allWorkTypes;
+  String _selectedSchedule = _allSchedules;
 
   @override
   void dispose() {
@@ -108,6 +111,11 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
                       jobWorkTypes.contains(_selectedWorkType)
                   ? _selectedWorkType
                   : _allWorkTypes;
+              final selectedSchedule =
+                  _selectedSchedule == _allSchedules ||
+                      jobSchedules.contains(_selectedSchedule)
+                  ? _selectedSchedule
+                  : _allSchedules;
               final normalizedQuery = _searchQuery.trim().toLowerCase();
               final filteredJobs = jobs
                   .where((job) {
@@ -122,7 +130,13 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
                     final matchesWorkType =
                         selectedWorkType == _allWorkTypes ||
                         job.workType == selectedWorkType;
-                    return matchesSearch && matchesLocation && matchesWorkType;
+                    final matchesSchedule =
+                        selectedSchedule == _allSchedules ||
+                        job.schedule == selectedSchedule;
+                    return matchesSearch &&
+                        matchesLocation &&
+                        matchesWorkType &&
+                        matchesSchedule;
                   })
                   .toList(growable: false);
 
@@ -267,9 +281,49 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
                                 }
                               },
                             ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                              key: const ValueKey('job-schedule-filter'),
+                              initialValue: selectedSchedule,
+                              decoration: InputDecoration(
+                                labelText: 'Schedule',
+                                prefixIcon: const Icon(
+                                  Icons.calendar_today_outlined,
+                                  color: Color(0xFF64816D),
+                                ),
+                                filled: true,
+                                fillColor: Colors.white,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFFDCE8DF),
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFFDCE8DF),
+                                  ),
+                                ),
+                              ),
+                              items: [_allSchedules, ...jobSchedules]
+                                  .map(
+                                    (schedule) => DropdownMenuItem(
+                                      value: schedule,
+                                      child: Text(schedule),
+                                    ),
+                                  )
+                                  .toList(growable: false),
+                              onChanged: (schedule) {
+                                if (schedule != null) {
+                                  setState(() => _selectedSchedule = schedule);
+                                }
+                              },
+                            ),
                             if (_searchQuery.trim().isNotEmpty ||
                                 selectedLocation != _allLocations ||
-                                selectedWorkType != _allWorkTypes) ...[
+                                selectedWorkType != _allWorkTypes ||
+                                selectedSchedule != _allSchedules) ...[
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: TextButton.icon(
@@ -338,6 +392,7 @@ class _StudentJobListingsScreenState extends State<StudentJobListingsScreen> {
       _searchQuery = '';
       _selectedLocation = _allLocations;
       _selectedWorkType = _allWorkTypes;
+      _selectedSchedule = _allSchedules;
     });
   }
 
@@ -364,6 +419,7 @@ class StudentJobListing {
     required this.employerId,
     required this.createdAt,
     this.workType,
+    this.schedule,
   });
 
   factory StudentJobListing.fromDocument(
@@ -380,6 +436,7 @@ class StudentJobListing {
       employerId: _readText(data, 'employerId'),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       workType: _readOptionalText(data, 'workType'),
+      schedule: _readOptionalText(data, 'schedule'),
     );
   }
 
@@ -391,6 +448,7 @@ class StudentJobListing {
   final String employerId;
   final DateTime? createdAt;
   final String? workType;
+  final String? schedule;
 
   static String? _readOptionalText(Map<String, dynamic> data, String key) {
     final value = data[key];
@@ -515,6 +573,11 @@ class _StudentJobDetailsScreenState extends State<StudentJobDetailsScreen> {
                       _JobDetailSection(
                         title: 'Work type',
                         content: widget.job.workType ?? 'Not specified',
+                      ),
+                      const SizedBox(height: 12),
+                      _JobDetailSection(
+                        title: 'Schedule',
+                        content: widget.job.schedule ?? 'Not specified',
                       ),
                       const SizedBox(height: 24),
                       SegmentedButton<bool>(
@@ -964,6 +1027,14 @@ class _JobCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 job.workType ?? 'Work type not specified',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF536359),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Schedule: ${job.schedule ?? 'Not specified'}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: const Color(0xFF536359),
                   fontWeight: FontWeight.w600,

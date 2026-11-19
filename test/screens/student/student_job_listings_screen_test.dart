@@ -15,6 +15,7 @@ const job = StudentJobListing(
   employerId: 'employer-1',
   createdAt: null,
   workType: 'Part-time',
+  schedule: 'Weekdays',
 );
 const secondJob = StudentJobListing(
   id: 'job-2',
@@ -25,6 +26,7 @@ const secondJob = StudentJobListing(
   employerId: 'employer-2',
   createdAt: null,
   workType: 'Full-time',
+  schedule: 'Weekends',
 );
 const thirdJob = StudentJobListing(
   id: 'job-3',
@@ -35,8 +37,19 @@ const thirdJob = StudentJobListing(
   employerId: 'employer-3',
   createdAt: null,
 );
+const fourthJob = StudentJobListing(
+  id: 'job-4',
+  title: 'Temporary Cleaner',
+  description: 'Help clean a local office.',
+  location: 'Busan',
+  requirements: 'Reliable and punctual.',
+  employerId: 'employer-4',
+  createdAt: null,
+  workType: 'Temporary/Contract',
+  schedule: 'Flexible',
+);
 
-const testJobs = [job, secondJob, thirdJob];
+const testJobs = [job, secondJob, thirdJob, fourthJob];
 
 void main() {
   testWidgets('shows loading state while jobs are loading', (tester) async {
@@ -80,6 +93,7 @@ void main() {
     expect(find.text('Cafe Assistant'), findsOneWidget);
     expect(find.text('Seoul'), findsOneWidget);
     expect(find.text('Part-time'), findsOneWidget);
+    expect(find.text('Schedule: Weekdays'), findsOneWidget);
     expect(
       find.text('Help prepare drinks and serve customers.'),
       findsOneWidget,
@@ -92,6 +106,8 @@ void main() {
     expect(find.text('Friendly and reliable.'), findsOneWidget);
     expect(find.text('employer-1'), findsOneWidget);
     expect(find.text('Work type'), findsOneWidget);
+    expect(find.text('Schedule'), findsOneWidget);
+    expect(find.text('Weekdays'), findsOneWidget);
     expect(find.text('Not available'), findsOneWidget);
   });
 
@@ -158,6 +174,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Busan').last);
     await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -1000));
+    await tester.pumpAndSettle();
 
     expect(find.text('Shop Assistant'), findsOneWidget);
     expect(find.text('Delivery Driver'), findsOneWidget);
@@ -196,6 +214,39 @@ void main() {
     expect(find.text('Work type not specified'), findsOneWidget);
   });
 
+  testWidgets('filters jobs by all advertised schedule values', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StudentJobListingsScreen(jobsStream: Stream.value(testJobs)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scheduleFilter = find.byKey(const ValueKey('job-schedule-filter'));
+    for (final (schedule, expectedTitle) in [
+      ('Weekdays', 'Cafe Assistant'),
+      ('Weekends', 'Shop Assistant'),
+      ('Flexible', 'Temporary Cleaner'),
+    ]) {
+      await tester.tap(scheduleFilter);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(schedule).last);
+      await tester.pumpAndSettle();
+
+      expect(find.text(expectedTitle), findsOneWidget);
+      for (final otherTitle in [
+        'Cafe Assistant',
+        'Shop Assistant',
+        'Delivery Driver',
+        'Temporary Cleaner',
+      ]) {
+        if (otherTitle != expectedTitle) {
+          expect(find.text(otherTitle), findsNothing);
+        }
+      }
+    }
+  });
+
   testWidgets('combines work type with search and location filters', (
     tester,
   ) async {
@@ -218,10 +269,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Full-time').last);
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('job-schedule-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Weekends').last);
+    await tester.pumpAndSettle();
 
     expect(find.text('Shop Assistant'), findsOneWidget);
     expect(find.text('Cafe Assistant'), findsNothing);
     expect(find.text('Delivery Driver'), findsNothing);
+    expect(find.text('Temporary Cleaner'), findsNothing);
   });
 
   testWidgets('combines search and location filters', (tester) async {
@@ -259,6 +315,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Part-time').last);
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('job-schedule-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Flexible').last);
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('job-search-field')),
       'no match',
@@ -272,6 +332,7 @@ void main() {
     expect(find.text('No matching jobs'), findsNothing);
     expect(find.text('All Locations'), findsOneWidget);
     expect(find.text('All Types'), findsOneWidget);
+    expect(find.text('All Schedules'), findsOneWidget);
     expect(find.byKey(const ValueKey('clear-job-filters')), findsNothing);
 
     await tester.enterText(

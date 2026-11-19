@@ -18,6 +18,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
   final _requirementsController = TextEditingController();
 
   String? _selectedWorkType;
+  String? _selectedSchedule;
   bool _isLoading = false;
 
   @override
@@ -134,6 +135,31 @@ class _PostJobScreenState extends State<PostJobScreen> {
                               : (value) =>
                                     setState(() => _selectedWorkType = value),
                         ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String?>(
+                          key: const ValueKey('post-job-schedule'),
+                          initialValue: _selectedSchedule,
+                          decoration: const InputDecoration(
+                            labelText: 'Schedule (optional)',
+                            prefixIcon: Icon(Icons.calendar_today_outlined),
+                          ),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('Not specified'),
+                            ),
+                            ...jobSchedules.map(
+                              (schedule) => DropdownMenuItem<String?>(
+                                value: schedule,
+                                child: Text(schedule),
+                              ),
+                            ),
+                          ],
+                          onChanged: _isLoading
+                              ? null
+                              : (value) =>
+                                    setState(() => _selectedSchedule = value),
+                        ),
                         const SizedBox(height: 24),
                         SizedBox(
                           height: 54,
@@ -245,6 +271,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
         'location': _locationController.text.trim(),
         'requirements': _requirementsController.text.trim(),
         'workType': _selectedWorkType!,
+        if (_selectedSchedule != null) 'schedule': _selectedSchedule,
         'employerId': user.uid,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -254,7 +281,10 @@ class _PostJobScreenState extends State<PostJobScreen> {
       _descriptionController.clear();
       _locationController.clear();
       _requirementsController.clear();
-      setState(() => _selectedWorkType = null);
+      setState(() {
+        _selectedWorkType = null;
+        _selectedSchedule = null;
+      });
       _showMessage('Job posted successfully.', isError: false);
     } on FirebaseException catch (error) {
       if (!mounted) return;

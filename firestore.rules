@@ -172,6 +172,15 @@ service cloud.firestore {
           ];
       }
 
+      function validScheduleIfProvided(data) {
+        return !('schedule' in data)
+          || data.schedule in [
+            'Weekdays',
+            'Weekends',
+            'Flexible'
+          ];
+      }
+
       // Students and employers with a valid profile can view job listings.
       allow read: if request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
@@ -198,9 +207,11 @@ service cloud.firestore {
           'requirements',
           'employerId',
           'createdAt',
-          'workType'
+          'workType',
+          'schedule'
         ])
         && validWorkTypeIfProvided(request.resource.data)
+        && validScheduleIfProvided(request.resource.data)
         && request.resource.data.employerId ==
            request.auth.uid
         && request.resource.data.createdAt ==
@@ -226,9 +237,11 @@ service cloud.firestore {
           'description',
           'location',
           'requirements',
-          'workType'
+          'workType',
+          'schedule'
         ])
         && validWorkTypeIfProvided(request.resource.data)
+        && validScheduleIfProvided(request.resource.data)
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.description is string
