@@ -46,7 +46,10 @@ try {
       setDoc(doc(db, 'users/student-a'), { role: 'student' }),
       setDoc(doc(db, 'users/student-b'), { role: 'student' }),
       setDoc(doc(db, 'users/student-new'), { role: 'student' }),
-      setDoc(doc(db, 'users/student-atomic'), { role: 'student' }),
+      setDoc(doc(db, 'users/student-atomic'), {
+        role: 'student',
+        fullName: '\u3000김민지\u00a0',
+      }),
       setDoc(doc(db, 'jobs/job-a'), {
         employerId: 'employer-a',
         title: 'Employer A job',
@@ -676,13 +679,37 @@ try {
     studentAtomic,
     'applications/job-a_student-atomic',
   );
-  const newApplicationBatch = writeBatch(studentAtomic);
-  newApplicationBatch.set(atomicApplication, {
+  const atomicApplicationData = {
     jobId: 'job-a',
     studentId: 'student-atomic',
     employerId: 'employer-a',
     status: 'pending',
     dateApplied: serverTimestamp(),
+  };
+  await assertSucceeds(getDoc(doc(studentAtomic, 'users/student-atomic')));
+  await assertFails(getDoc(doc(employerA, 'users/student-atomic')));
+  await assertFails(getDocs(collection(employerA, 'users')));
+  for (const applicantName of [null, 42, '', '   ', '다른 이름', '\u3000김민지\u00a0']) {
+    await assertFails(setDoc(atomicApplication, {
+      ...atomicApplicationData,
+      applicantName,
+    }));
+  }
+  const longName = '가'.repeat(101);
+  await assertSucceeds(updateDoc(doc(studentAtomic, 'users/student-atomic'), {
+    fullName: longName,
+  }));
+  await assertFails(setDoc(atomicApplication, {
+    ...atomicApplicationData,
+    applicantName: longName,
+  }));
+  await assertSucceeds(updateDoc(doc(studentAtomic, 'users/student-atomic'), {
+    fullName: '\u3000김민지\u00a0',
+  }));
+  const newApplicationBatch = writeBatch(studentAtomic);
+  newApplicationBatch.set(atomicApplication, {
+    ...atomicApplicationData,
+    applicantName: '김민지',
   });
   newApplicationBatch.set(
     doc(
@@ -698,6 +725,18 @@ try {
     },
   );
   await assertSucceeds(newApplicationBatch.commit());
+  const namedApplication = doc(employerA, 'applications/job-a_student-atomic');
+  assert.equal((await assertSucceeds(getDoc(namedApplication))).data().applicantName, '김민지');
+  await assertFails(getDoc(doc(employerB, 'applications/job-a_student-atomic')));
+  await assertFails(updateDoc(atomicApplication, { applicantName: '다른 이름' }));
+  await assertFails(updateDoc(namedApplication, {
+    status: 'accepted',
+    applicantName: '다른 이름',
+  }));
+  await assertSucceeds(updateDoc(doc(studentAtomic, 'users/student-atomic'), {
+    fullName: '새 이름',
+  }));
+  assert.equal((await assertSucceeds(getDoc(namedApplication))).data().applicantName, '김민지');
   await assertFails(
     setDoc(
       doc(

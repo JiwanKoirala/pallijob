@@ -17,6 +17,12 @@ abstract interface class JobApplicationService {
 class FirestoreJobApplicationService implements JobApplicationService {
   const FirestoreJobApplicationService();
 
+  // Keep the whitespace definition aligned with Firestore rules.
+  static final _nameEdgeWhitespace = RegExp(
+    r'^[\u0009-\u000D\u0085\uFEFF\p{Z}]+|[\u0009-\u000D\u0085\uFEFF\p{Z}]+$',
+    unicode: true,
+  );
+
   @override
   Future<JobApplicationStatus> getStatus(String jobId) async {
     final user = FirebaseAuth.instance.currentUser;
@@ -46,27 +52,22 @@ class FirestoreJobApplicationService implements JobApplicationService {
       );
     }
 
-    final profile = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
-    if (profile.data()?['role'] != 'student') {
-      throw const JobApplicationException(
-        'Only student accounts can apply for jobs.',
-      );
-    }
-
-    if (auth.currentUser?.uid != user.uid) {
-      throw const JobApplicationException(
-        'Your session expired. Please sign in again.',
-      );
-    }
-
+    final firestore = FirebaseFirestore.instance;
+    final profileReference = firestore.collection('users').doc(user.uid);
     final application = _applicationReference(jobId, user.uid);
-    final jobReference = FirebaseFirestore.instance
-        .collection('jobs')
-        .doc(jobId);
-    await FirebaseFirestore.instance.runTransaction((transaction) async {
+    final jobReference = firestore.collection('jobs').doc(jobId);
+    await firestore.runTransaction((transaction) async {
+      final profile = (await transaction.get(profileReference)).data();
+      if (profile?['role'] != 'student') {
+        throw const JobApplicationException(
+          'Only student accounts can apply for jobs.',
+        );
+      }
+      final fullName = profile?['fullName'];
+      final applicantName = fullName is String
+          ? fullName.replaceAll(_nameEdgeWhitespace, '')
+          : '';
+
       final existingApplication = await transaction.get(application);
       if (existingApplication.exists) {
         throw const JobAlreadyAppliedException();
@@ -89,7 +90,13 @@ class FirestoreJobApplicationService implements JobApplicationService {
         );
       }
 
-      final notifications = FirebaseFirestore.instance
+      if (auth.currentUser?.uid != user.uid) {
+        throw const JobApplicationException(
+          'Your session expired. Please sign in again.',
+        );
+      }
+
+      final notifications = firestore
           .collection('users')
           .doc(employerId)
           .collection('notifications');
@@ -99,6 +106,8 @@ class FirestoreJobApplicationService implements JobApplicationService {
         'employerId': employerId,
         'status': 'pending',
         'dateApplied': FieldValue.serverTimestamp(),
+        if (applicantName.isNotEmpty && applicantName.runes.length <= 100)
+          'applicantName': applicantName,
       });
       transaction.set(notifications.doc('new-application__${application.id}'), {
         'type': 'new_application',

@@ -13,6 +13,7 @@ class EmployerApplication {
     required this.status,
     required this.dateApplied,
     required this.jobUnavailable,
+    this.applicantName,
     this.canChat = false,
     this.canDecide = true,
   });
@@ -21,11 +22,20 @@ class EmployerApplication {
   final String jobId;
   final String jobTitle;
   final String applicantId;
+  final String? applicantName;
   final String status;
   final DateTime? dateApplied;
   final bool jobUnavailable;
   final bool canChat;
   final bool canDecide;
+
+  String? get displayName {
+    final name = applicantName?.trim();
+    return name == null || name.isEmpty ? null : name;
+  }
+
+  String get applicantLabel =>
+      displayName ?? (applicantId.isEmpty ? '지원자 정보 없음' : applicantId);
 }
 
 enum EmployerApplicationDecision { accepted, rejected }
@@ -106,6 +116,7 @@ class FirestoreEmployerApplicationsService
       final jobTitle = jobTitles[jobId];
       final actualEmployerId = jobOwners[jobId];
       final applicantId = _textValue(data['studentId']);
+      final applicantName = data['applicantName'];
       final ownershipMatches =
           actualEmployerId != null &&
           (!data.containsKey('employerId') ||
@@ -117,6 +128,7 @@ class FirestoreEmployerApplicationsService
           jobId: jobId,
           jobTitle: jobTitle ?? '더 이상 이용할 수 없는 공고',
           applicantId: applicantId,
+          applicantName: applicantName is String ? applicantName : null,
           status: _textValue(data['status']),
           dateApplied: appliedAt is Timestamp ? appliedAt.toDate() : null,
           jobUnavailable: jobTitle == null,
@@ -394,7 +406,7 @@ class _EmployerApplicationsScreenState
       builder: (dialogContext) => AlertDialog(
         title: Text('$decisionLabel 지원서'),
         content: Text(
-          '${application.applicantId}님의 "${application.jobTitle}" 지원을 $decisionLabel하시겠습니까?',
+          '${application.applicantLabel}님의 "${application.jobTitle}" 지원을 $decisionLabel하시겠습니까?',
         ),
         actions: [
           TextButton(
@@ -520,10 +532,8 @@ class _EmployerApplicationCard extends StatelessWidget {
                 ],
                 const SizedBox(height: 12),
                 _ApplicationDetail(
-                  label: '지원자 ID',
-                  value: application.applicantId.isEmpty
-                      ? '지원자 정보 없음'
-                      : application.applicantId,
+                  label: application.displayName == null ? '지원자 ID' : '지원자 이름',
+                  value: application.applicantLabel,
                 ),
                 const SizedBox(height: 8),
                 Row(

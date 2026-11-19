@@ -57,6 +57,33 @@ void main() {
     expect(find.text('Chat'), findsNothing);
   });
 
+  testWidgets('shows the applicant name on the card and in confirmation', (
+    tester,
+  ) async {
+    const application = EmployerApplication(
+      id: 'job-1_student-1',
+      jobId: 'job-1',
+      jobTitle: 'Cafe Assistant',
+      applicantId: 'student-1',
+      applicantName: '김민지',
+      status: 'pending',
+      dateApplied: null,
+      jobUnavailable: false,
+    );
+    await _pumpApplications(tester, [application]);
+
+    expect(find.text('지원자 이름'), findsOneWidget);
+    expect(find.text('김민지'), findsOneWidget);
+    expect(find.text('지원자 ID'), findsNothing);
+    expect(find.text('student-1'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey('accept-application-job-1_student-1')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('김민지님'), findsOneWidget);
+  });
+
   testWidgets('shows an authorized Chat entry and opens its application chat', (
     tester,
   ) async {

@@ -259,6 +259,19 @@ service cloud.firestore {
     }
 
     match /applications/{applicationId} {
+      function validApplicantNameIfProvided() {
+        let name = request.resource.data.get('applicantName', null);
+        let fullName = get(/databases/$(database)/documents/users/$(request.auth.uid))
+          .data.get('fullName', null);
+        // Match the Unicode whitespace trimmed by the Flutter client.
+        let spaces = '[\\x{0009}-\\x{000D}\\x{0085}\\x{FEFF}\\p{Z}]+';
+        return !('applicantName' in request.resource.data)
+          || (name is string
+            && name.matches('(?s).{1,100}')
+            && fullName is string
+            && name == fullName.replace('^' + spaces + '|' + spaces + '$', ''));
+      }
+
       function notificationPath(recipientId, notificationId) {
         return /databases/$(database)/documents/users/$(recipientId)/notifications/$(notificationId);
       }
@@ -340,8 +353,10 @@ service cloud.firestore {
           'studentId',
           'employerId',
           'status',
-          'dateApplied'
+          'dateApplied',
+          'applicantName'
         ])
+        && validApplicantNameIfProvided()
         && request.resource.data.jobId is string
         && request.resource.data.jobId.size() > 0
         && request.resource.data.studentId == request.auth.uid
